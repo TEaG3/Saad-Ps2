@@ -1,0 +1,191 @@
+name: Build Saad PS2 APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Gradle Wrapper and App Structure
+        run: |
+          mkdir -p app/src/main/java/com/saad/ps2manager app/src/main/assets app/src/main/res/values
+          
+          # 1. AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saad.ps2manager">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:allowBackup="true" android:label="Saad PS2" android:supportsRtl="true" android:usesCleartextTraffic="true" android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 2. build.gradle
+          cat << 'EOF' > build.gradle
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              compileSdk 34
+              defaultConfig { applicationId "com.saad.ps2manager"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.documentfile:documentfile:1.0.1'
+          }
+          EOF
+
+          cat << 'EOF' > settings.gradle
+          rootProject.name = "SaadPS2App"
+          include ':app'
+          EOF
+
+          # نسخ ملف index.html الحالي كواجهة للتطبيق داخل assets
+          if [ -f index.html ]; then cp index.html app/src/main/assets/; else echo "<html><body>Saad PS2</body></html>" > app/src/main/assets/index.html; fi
+
+          # إنشاء ملفات الجسر البرمجي للـ OTG
+          cat << 'EOF' > app/src/main/java/com/saad/ps2manager/MainActivity.kt
+          package com.saad.ps2manager
+          import android.app.Activity
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Bundle
+          import android.webkit.JavascriptInterface
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.documentfile.provider.DocumentFile
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.InputStream
+          import java.net.HttpURLConnection
+          import java.net.URL
+          import java.nio.charset.Charset
+          import java.util.regex.Pattern
+          import kotlin.concurrent.thread
+
+          class MainActivity : AppCompatActivity() {
+              private lateinit var webView: WebView
+              private var usbRootDir: DocumentFile? = null
+              private val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+                  if (res.resultCode == Activity.RESULT_OK) {
+                      res.data?.data?.let { uri ->
+                          contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                          usbRootDir = DocumentFile.fromTreeUri(this, uri)
+                          scanUsb()
+                      }
+                  }
+              }
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  webView = WebView(this).apply {
+                      settings.javaScriptEnabled = true
+                      settings.domStorageEnabled = true
+                      webViewClient = WebViewClient()
+                      addJavascriptInterface(Bridge(), "AndroidUSB")
+                      loadUrl("file:///android_asset/index.html")
+                  }
+                  setContentView(webView)
+              }
+              inner class Bridge {
+                  @JavascriptInterface fun pickUsbFolder() { launcher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)) }
+                  @JavascriptInterface fun downloadAndSaveCover(id: String) {
+                      thread {
+                          val success = writeArt(id)
+                          runOnUiThread { webView.evaluateJavascript("if(window.onCoverSaved) onCoverSaved('$id', $success);", null) }
+                      }
+                  }
+              }
+              private fun scanUsb() {
+                  thread {
+                      val root = usbRootDir ?: return@thread
+                      val arr = JSONArray()
+                      val art = root.findFile("ART")?.listFiles()?.mapNotNull { it.name?.uppercase() }?.toSet() ?: emptySet()
+                      val ico = root.findFile("ICONS")?.listFiles()?.mapNotNull { it.name?.uppercase() }?.toSet() ?: emptySet()
+                      listOf("DVD", "CD").forEach { dir ->
+                          root.findFile(dir)?.listFiles()?.forEach { f ->
+                              if (f.isFile && f.name?.lowercase()?.endsWith(".iso") == true) {
+                                  val id = extractId(f.uri, f.name!!)
+                                  if (id != null) {
+                                      arr.put(JSONObject().put("title", f.name).put("gameId", id).put("format", "ISO").put("hasCover", art.contains("${id}_COV.JPG") || art.contains("$id.JPG")).put("hasIcon", ico.contains("${id}_ICO.PNG")))
+                                  }
+                              }
+                          }
+                      }
+                      runOnUiThread { webView.evaluateJavascript("if(window.onGamesScanned) onGamesScanned(${arr});", null) }
+                  }
+              }
+              private fun extractId(uri: Uri, name: String): String? {
+                  try {
+                      contentResolver.openInputStream(uri)?.use { s ->
+                          val buf = ByteArray(2 * 1024 * 1024)
+                          val len = s.read(buf)
+                          if (len > 0) {
+                              val m = Pattern.compile("([S|P|L][L|C|B][U|E|P|K|A|J][S|D|M|X|P][_\\-]\\d{3}\\.\\d{2})", Pattern.CASE_INSENSITIVE).matcher(String(buf, 0, len, Charset.forName("US-ASCII")))
+                              if (m.find()) return m.group(1)?.uppercase()?.replace('-', '_')
+                          }
+                      }
+                  } catch(_: Exception){}
+                  val nm = Pattern.compile("([A-Z]{4}[_\\-]\\d{3}\\.\\d{2})", Pattern.CASE_INSENSITIVE).matcher(name)
+                  return if (nm.find()) nm.group(1)?.uppercase()?.replace('-', '_') else null
+              }
+              private fun writeArt(id: String): Boolean {
+                  val root = usbRootDir ?: return false
+                  val dash = id.replace('_', '-')
+                  var bytes: ByteArray? = null
+                  for (u in listOf("https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default/$dash.jpg", "https://art.gametdb.com/ps2/cover/US/$dash.jpg")) {
+                      try {
+                          val c = URL(u).openConnection() as HttpURLConnection
+                          if (c.responseCode == 200) { bytes = c.inputStream.use(InputStream::readBytes); break }
+                      } catch(_: Exception){}
+                  }
+                  if (bytes == null) return false
+                  return try {
+                      val aDir = root.findFile("ART") ?: root.createDirectory("ART") ?: return false
+                      val iDir = root.findFile("ICONS") ?: root.createDirectory("ICONS") ?: return false
+                      aDir.findFile("${id}_COV.jpg")?.delete(); aDir.createFile("image/jpeg", "${id}_COV.jpg")?.let { contentResolver.openOutputStream(it.uri)?.use { os -> os.write(bytes) } }
+                      iDir.findFile("${id}_ICO.png")?.delete(); iDir.createFile("image/png", "${id}_ICO.png")?.let { contentResolver.openOutputStream(it.uri)?.use { os -> os.write(bytes) } }
+                      true
+                  } catch(_: Exception){ false }
+              }
+          }
+          EOF
+          
+          # إنشاء مجلد القيم لتجنب أخطاء الثيم
+          cat << 'EOF' > app/src/main/res/values/themes.xml
+          <resources><style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar"/></resources>
+          EOF
+          
+          gradle wrapper
+
+      - name: Build APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saad-PS2-App
+          path: app/build/outputs/apk/debug/app-debug.apk

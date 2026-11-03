@@ -9,6 +9,7 @@ on:
       - 'sw.js'
       - 'capacitor.config.ts'
       - 'package.json'
+      - 'saf-storage-bridge.bundle.js'
       - 'android-native/**'
       - '.github/workflows/android-apk.yml'
 permissions:

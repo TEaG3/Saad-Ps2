@@ -548,6 +548,7 @@
     const isNativeAndroid = !!(nativeSaf && window.Capacitor.isNativePlatform && window.Capacitor.getPlatform() === 'android');
     const supportsFsApi = ('showDirectoryPicker' in window) || isNativeAndroid;
     if (!supportsFsApi) $('unsupportedNotice').hidden = false;
+    if (isNativeAndroid) btnSelectUsb.textContent = '📁 اختر مجلد الألعاب (الهاتف / USB OTG)';
 
     // ---------- Android Storage Access Framework adapter ----------
     // يحاكي واجهة File System Access API حتى تبقى وظائف الفحص والحفظ مشتركة بين الويب والتطبيق.
@@ -627,12 +628,13 @@
             this.uri = uri;
             this.name = name || 'Storage';
         }
-        async values() {
+        async *values() {
             const result = await nativeSaf.listFiles({ uri: this.uri });
-            const entries = (result.files || []).map(item => item.directory
-                ? new NativeDirectoryHandle(item.uri, item.name)
-                : new NativeFileHandle(this.uri, item.name, item.size));
-            return (async function* () { for (const entry of entries) yield entry; })();
+            for (const item of (result.files || [])) {
+                yield item.directory
+                    ? new NativeDirectoryHandle(item.uri, item.name)
+                    : new NativeFileHandle(this.uri, item.name, item.size);
+            }
         }
         async getDirectoryHandle(name, options = {}) {
             const result = await nativeSaf.listFiles({ uri: this.uri });

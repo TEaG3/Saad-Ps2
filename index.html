@@ -577,9 +577,10 @@
     }
 
     class NativeFileHandle {
-        constructor(parentUri, name, size = 0) {
+        constructor(rootUri, parentPath, name, size = 0) {
             this.kind = 'file';
-            this.parentUri = parentUri;
+            this.rootUri = rootUri;
+            this.parentPath = parentPath || [];
             this.name = name;
             this.size = size;
         }
@@ -593,7 +594,7 @@
                         return {
                             arrayBuffer: async () => {
                                 const result = await nativeSaf.readFileRange({
-                                    uri: handle.parentUri, name: handle.name,
+                                    uri: handle.rootUri, path: handle.parentPath.join('/'), name: handle.name,
                                     offset: Math.max(0, Number(start) || 0),
                                     length: Math.max(0, Math.min(8 * 1024 * 1024, (Number(end) || handle.size) - (Number(start) || 0)))
                                 });
@@ -603,7 +604,7 @@
                     }
                 };
             }
-            const result = await nativeSaf.readFile({ uri: this.parentUri, name: this.name });
+            const result = await nativeSaf.readFile({ uri: this.rootUri, path: this.parentPath.join('/'), name: this.name });
             const mime = /\.png$/i.test(this.name) ? 'image/png' : /\.jpe?g$/i.test(this.name) ? 'image/jpeg' : 'application/octet-stream';
             return new File([base64ToBlob(result.data, mime)], this.name, { type: mime, lastModified: Date.now() });
         }
@@ -615,7 +616,8 @@
                 async close() {
                     if (!pending) pending = new Blob([]);
                     await nativeSaf.writeFile({
-                        uri: handle.parentUri,
+                        uri: handle.rootUri,
+                        path: handle.parentPath.join('/'),
                         name: handle.name,
                         data: await blobToBase64(pending)
                     });
@@ -625,39 +627,40 @@
     }
 
     class NativeDirectoryHandle {
-        constructor(uri, name) {
+        constructor(rootUri, name, path = []) {
             this.kind = 'directory';
-            this.uri = uri;
+            this.rootUri = rootUri;
+            this.path = path;
             this.name = name || 'Storage';
         }
         async *values() {
-            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const result = await nativeSaf.listFiles({ uri: this.rootUri, path: this.path.join('/') });
             for (const item of (result.files || [])) {
                 yield item.directory
-                    ? new NativeDirectoryHandle(item.uri, item.name)
-                    : new NativeFileHandle(this.uri, item.name, item.size);
+                    ? new NativeDirectoryHandle(this.rootUri, item.name, [...this.path, item.name])
+                    : new NativeFileHandle(this.rootUri, this.path, item.name, item.size);
             }
         }
         async getDirectoryHandle(name, options = {}) {
-            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const result = await nativeSaf.listFiles({ uri: this.rootUri, path: this.path.join('/') });
             const found = (result.files || []).find(item => item.directory && item.name === name);
-            if (found) return new NativeDirectoryHandle(found.uri, found.name);
+            if (found) return new NativeDirectoryHandle(this.rootUri, found.name, [...this.path, found.name]);
             if (!options.create) throw new DOMException('Directory not found', 'NotFoundError');
-            const created = await nativeSaf.createDirectory({ uri: this.uri, name });
-            return new NativeDirectoryHandle(created.uri, created.name);
+            const created = await nativeSaf.createDirectory({ uri: this.rootUri, path: this.path.join('/'), name });
+            return new NativeDirectoryHandle(this.rootUri, created.name, [...this.path, created.name]);
         }
         async getFileHandle(name, options = {}) {
-            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const result = await nativeSaf.listFiles({ uri: this.rootUri, path: this.path.join('/') });
             const found = (result.files || []).find(item => !item.directory && item.name === name);
             if (!found && !options.create) throw new DOMException('File not found', 'NotFoundError');
-            return new NativeFileHandle(this.uri, name, found ? found.size : 0);
+            return new NativeFileHandle(this.rootUri, this.path, name, found ? found.size : 0);
         }
     }
 
     async function pickStorageFolder() {
         const picked = await nativeSaf.pickFolder();
         if (!picked || !picked.uri) throw new Error('لم يتم اختيار مجلد تخزين صالح');
-        return new NativeDirectoryHandle(picked.uri, picked.name);
+        return new NativeDirectoryHandle(picked.uri, picked.name, []);
     }
 
     // ---------- أدوات مساعدة ----------

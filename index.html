@@ -444,6 +444,22 @@
         <div class="stat-card"><h3 id="statMissing">0</h3><span>ألعاب ينقصها غلاف أو أيقونة</span></div>
     </div>
 
+    <section class="control-panel" id="databasePanel" style="text-align:right;margin-bottom:24px;">
+        <h2 style="font-size:20px;margin-bottom:8px;">🗃️ قاعدة بيانات Saad PS2</h2>
+        <p class="section-sub" style="margin-bottom:12px;">يحفظ التطبيق الألعاب التي يتعرف عليها محلياً، ويزامن كتالوج المعلومات المركزي عند توفر تحديث. بيانات مكتبتك تبقى على جهازك.</p>
+        <div class="stats-grid" style="margin-bottom:12px;">
+            <div class="stat-card"><h3 id="dbLocalCount">0</h3><span>ألعاب محفوظة محلياً</span></div>
+            <div class="stat-card"><h3 id="dbCatalogCount">0</h3><span>سجلات الكتالوج المركزي</span></div>
+            <div class="stat-card"><h3 id="dbSyncState" style="font-size:16px;">لم تتم المزامنة</h3><span>حالة تحديث البيانات</span></div>
+        </div>
+        <p id="dbLastSync" style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">لم تتم مزامنة الكتالوج بعد.</p>
+        <div class="btn-group" style="justify-content:flex-start;margin-top:0;">
+            <button id="btnSyncDatabase" class="btn-secondary" type="button">🔄 تحديث قاعدة البيانات</button>
+            <button id="btnExportDatabase" class="btn-secondary" type="button">📤 تصدير نسخة احتياطية</button>
+        </div>
+        <p id="dbMessage" role="status" style="color:var(--text-muted);font-size:12px;margin-top:10px;"></p>
+    </section>
+
     <div class="progress-wrapper" id="progressWrapper" aria-live="polite">
         <div class="progress-head">
             <span id="progressText">جاري المعالجة...</span>
@@ -530,6 +546,7 @@
     </div>
 </div>
 
+<script src="./game-database.js"></script>
 <script src="./saf-storage-bridge.bundle.js"></script>
 <script>
     // ---------- الإعدادات ----------
@@ -801,6 +818,66 @@
         return map;
     }
 
+    // ---------- قاعدة بيانات الألعاب المحلية والمركزية ----------
+    async function refreshDatabasePanel() {
+        if (!window.SaadGameDB) return;
+        const info = await window.SaadGameDB.getStats();
+        $('dbLocalCount').textContent = info.localCount;
+        $('dbCatalogCount').textContent = info.catalogCount;
+        $('dbSyncState').textContent = info.status === 'online' ? 'محدّثة' : info.status === 'offline' ? 'دون اتصال' : 'محلية';
+        $('dbLastSync').textContent = info.lastSync
+            ? 'آخر مزامنة: ' + new Date(info.lastSync).toLocaleString('ar-IQ')
+            : 'لم تتم مزامنة الكتالوج بعد.';
+    }
+
+    async function syncGameDatabase(showMessage = true) {
+        const button = $('btnSyncDatabase');
+        const message = $('dbMessage');
+        if (button) button.disabled = true;
+        if (message) message.textContent = 'جاري التحقق من تحديثات كتالوج الألعاب...';
+        try {
+            const result = await window.SaadGameDB.syncCatalog();
+            await refreshDatabasePanel();
+            if (message) message.textContent = result.updated
+                ? 'تم تحديث بيانات الكتالوج بنجاح.'
+                : result.status === 'offline'
+                    ? 'لا يوجد اتصال حالياً؛ ستبقى قاعدة بياناتك المحلية متاحة.'
+                    : 'قاعدة البيانات المحلية محدثة بالفعل.';
+        } catch (error) {
+            if (message) message.textContent = 'تعذر تحديث الكتالوج الآن. ستستمر وظائف فحص الألعاب والأغلفة بصورة طبيعية.';
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    $('btnSyncDatabase').addEventListener('click', () => syncGameDatabase(true));
+    $('btnExportDatabase').addEventListener('click', async () => {
+        try {
+            const backup = await window.SaadGameDB.exportBackup();
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'saad-ps2-database-backup.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            $('dbMessage').textContent = 'تم تصدير النسخة الاحتياطية لقاعدة بيانات الألعاب.';
+        } catch (error) {
+            $('dbMessage').textContent = 'تعذر إنشاء النسخة الاحتياطية.';
+        }
+    });
+
+    (async () => {
+        try {
+            await window.SaadGameDB.init();
+            await refreshDatabasePanel();
+            // تحديث الكتالوج لا يغيّر ملفات التطبيق ولا يثبّت إصداراً جديداً.
+            await syncGameDatabase(false);
+        } catch (error) {
+            console.warn('قاعدة البيانات المحلية غير متاحة:', error);
+        }
+    })();
+
     // ---------- المصدر الأوفلاين ----------
     sourceMode.addEventListener('change', () => {
         btnLocalOffline.style.display = sourceMode.value === 'offline' ? 'inline-flex' : 'none';
@@ -961,6 +1038,15 @@
             seen.add(key);
             return true;
         });
+
+        if (window.SaadGameDB) {
+            try {
+                await window.SaadGameDB.recordScan(detectedGames);
+                await refreshDatabasePanel();
+            } catch (dbError) {
+                console.warn('تعذر حفظ نتائج الفحص في قاعدة البيانات المحلية:', dbError);
+            }
+        }
 
         await checkExistingArtwork(detectedGames);
         render();

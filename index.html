@@ -543,8 +543,118 @@
     $('viewList').addEventListener('click', () => setView('list'));
     btnRescan.addEventListener('click', () => { if (usbRootHandle && !isBusy) scanUsbDrive(); });
 
-    const supportsFsApi = 'showDirectoryPicker' in window;
+    const nativeSaf = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SafStorage
+        ? window.Capacitor.Plugins.SafStorage : null;
+    const isNativeAndroid = !!(nativeSaf && window.Capacitor.isNativePlatform && window.Capacitor.getPlatform() === 'android');
+    const supportsFsApi = ('showDirectoryPicker' in window) || isNativeAndroid;
     if (!supportsFsApi) $('unsupportedNotice').hidden = false;
+
+    // ---------- Android Storage Access Framework adapter ----------
+    // يحاكي واجهة File System Access API حتى تبقى وظائف الفحص والحفظ مشتركة بين الويب والتطبيق.
+    function base64ToBlob(value, type) {
+        const binary = atob(value || '');
+        const chunks = [];
+        for (let i = 0; i < binary.length; i += 32768) {
+            const part = binary.slice(i, i + 32768);
+            const bytes = new Uint8Array(part.length);
+            for (let j = 0; j < part.length; j++) bytes[j] = part.charCodeAt(j);
+            chunks.push(bytes);
+        }
+        return new Blob(chunks, { type: type || 'application/octet-stream' });
+    }
+
+    async function blobToBase64(blob) {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        const step = 0x8000;
+        for (let i = 0; i < bytes.length; i += step) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + step));
+        }
+        return btoa(binary);
+    }
+
+    class NativeFileHandle {
+        constructor(parentUri, name, size = 0) {
+            this.kind = 'file';
+            this.parentUri = parentUri;
+            this.name = name;
+            this.size = size;
+        }
+        async getFile() {
+            if (/\.iso$/i.test(this.name)) {
+                const handle = this;
+                return {
+                    name: handle.name,
+                    size: handle.size,
+                    slice(start = 0, end = handle.size) {
+                        return {
+                            arrayBuffer: async () => {
+                                const result = await nativeSaf.readFileRange({
+                                    uri: handle.parentUri, name: handle.name,
+                                    offset: Math.max(0, Number(start) || 0),
+                                    length: Math.max(0, Math.min(8 * 1024 * 1024, (Number(end) || handle.size) - (Number(start) || 0)))
+                                });
+                                return base64ToBlob(result.data).arrayBuffer();
+                            }
+                        };
+                    }
+                };
+            }
+            const result = await nativeSaf.readFile({ uri: this.parentUri, name: this.name });
+            const mime = /\.png$/i.test(this.name) ? 'image/png' : /\.jpe?g$/i.test(this.name) ? 'image/jpeg' : 'application/octet-stream';
+            return new File([base64ToBlob(result.data, mime)], this.name, { type: mime, lastModified: Date.now() });
+        }
+        async createWritable() {
+            let pending = null;
+            const handle = this;
+            return {
+                async write(data) { pending = data instanceof Blob ? data : new Blob([data]); },
+                async close() {
+                    if (!pending) pending = new Blob([]);
+                    await nativeSaf.writeFile({
+                        uri: handle.parentUri,
+                        name: handle.name,
+                        data: await blobToBase64(pending)
+                    });
+                }
+            };
+        }
+    }
+
+    class NativeDirectoryHandle {
+        constructor(uri, name) {
+            this.kind = 'directory';
+            this.uri = uri;
+            this.name = name || 'Storage';
+        }
+        async values() {
+            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const entries = (result.files || []).map(item => item.directory
+                ? new NativeDirectoryHandle(item.uri, item.name)
+                : new NativeFileHandle(this.uri, item.name, item.size));
+            return (async function* () { for (const entry of entries) yield entry; })();
+        }
+        async getDirectoryHandle(name, options = {}) {
+            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const found = (result.files || []).find(item => item.directory && item.name === name);
+            if (found) return new NativeDirectoryHandle(found.uri, found.name);
+            if (!options.create) throw new DOMException('Directory not found', 'NotFoundError');
+            const created = await nativeSaf.createDirectory({ uri: this.uri, name });
+            return new NativeDirectoryHandle(created.uri, created.name);
+        }
+        async getFileHandle(name, options = {}) {
+            const result = await nativeSaf.listFiles({ uri: this.uri });
+            const found = (result.files || []).find(item => !item.directory && item.name === name);
+            if (!found && !options.create) throw new DOMException('File not found', 'NotFoundError');
+            return new NativeFileHandle(this.uri, name, found ? found.size : 0);
+        }
+    }
+
+    async function pickStorageFolder() {
+        const picked = await nativeSaf.pickFolder();
+        if (!picked || !picked.uri) throw new Error('لم يتم اختيار مجلد تخزين صالح');
+        return new NativeDirectoryHandle(picked.uri, picked.name);
+    }
 
     // ---------- أدوات مساعدة ----------
     function escapeHtml(value) {
@@ -653,11 +763,13 @@
     btnLocalOffline.addEventListener('click', async () => {
         if (!supportsFsApi) return;
         try {
-            offlineFolderHandle = await window.showDirectoryPicker({ mode: 'read' });
+            offlineFolderHandle = isNativeAndroid
+                ? await pickStorageFolder()
+                : await window.showDirectoryPicker({ mode: 'read' });
             offlineFiles = await listDir(offlineFolderHandle);
             btnLocalOffline.textContent = `✅ مجلد الأوفلاين: ${offlineFolderHandle.name} (${offlineFiles.size} ملف)`;
         } catch (e) {
-            // ألغى المستخدم أو لم يسمح المتصفح بالوصول
+            if (e && e.message) alert(e.message);
         }
     });
 
@@ -668,9 +780,13 @@
             return;
         }
         try {
-            usbRootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            usbRootHandle = isNativeAndroid
+                ? await pickStorageFolder()
+                : await window.showDirectoryPicker({ mode: 'readwrite' });
+            btnSelectUsb.textContent = `✅ ${usbRootHandle.name}`;
         } catch (err) {
-            return; // إلغاء
+            if (err && err.message) alert(err.message);
+            return;
         }
         await scanUsbDrive();
     });

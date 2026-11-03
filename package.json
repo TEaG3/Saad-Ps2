@@ -12,6 +12,7 @@
     "@capacitor/core": "^6.2.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.2.1"
+    "@capacitor/cli": "^6.2.1",
+    "esbuild": "^0.24.2"
   }
 }

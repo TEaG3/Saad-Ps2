@@ -28,6 +28,10 @@ jobs:
           java-version: '17'
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
+      - name: Prepare web assets
+        run: |
+          mkdir -p www
+          cp index.html manifest.webmanifest sw.js icon.svg www/
       - name: Generate Android project
         run: npx cap add android
       - name: Install native SAF bridge

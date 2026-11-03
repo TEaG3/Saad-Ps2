@@ -3,6 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0e17">
+    <meta name="description" content="Saad PS2 Artwork Station - إدارة أغلفة وأيقونات ألعاب PlayStation 2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Saad PS2">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="apple-touch-icon" href="./icon.svg">
     <title>Saad PS2 | مدير أغلفة وأيقونات ألعاب بلايستيشن 2</title>
     <style>
         :root {
@@ -227,6 +235,14 @@
         .modal-box h4 { margin-bottom: 12px; font-size: 15px; }
         .modal-box button { margin-top: 12px; }
 
+
+        #installAppBtn { display:inline-flex; }
+        @media (max-width:520px) {
+            .topnav { gap:10px; flex-wrap:wrap; }
+            .topnav .brand { flex:1 1 auto; }
+            #installAppBtn, .topnav .btn-link { flex:1 1 100%; width:100%; }
+        }
+
         html { scroll-behavior: smooth; }
 
         .topnav {
@@ -334,6 +350,7 @@
             <strong>Saad PS2</strong>
         </div>
         <a class="btn-link ghost" href="#how">كيف يعمل؟</a>
+        <button id="installAppBtn" class="btn-primary" type="button" style="padding:9px 16px;font-size:13px;">⬇️ تثبيت التطبيق</button>
     </nav>
 
     <section class="hero">
@@ -1156,6 +1173,53 @@
     window.addEventListener('beforeunload', e => {
         if (isBusy) { e.preventDefault(); e.returnValue = ''; }
     });
+
+    // ---------- تثبيت التطبيق والعمل دون اتصال ----------
+    const installAppBtn = document.getElementById('installAppBtn');
+    let deferredInstallPrompt = null;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if (isStandalone) {
+        installAppBtn.textContent = '✓ التطبيق مثبت';
+        installAppBtn.disabled = true;
+    }
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        installAppBtn.hidden = false;
+        installAppBtn.textContent = '⬇️ تثبيت التطبيق';
+    });
+
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        installAppBtn.textContent = '✓ تم تثبيت التطبيق';
+        installAppBtn.disabled = true;
+    });
+
+    installAppBtn.addEventListener('click', async () => {
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            return;
+        }
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        if (isIOS && !isStandalone) {
+            alert('لتثبيت Saad PS2 على iPhone أو iPad:\\n1) افتح الموقع في Safari.\\n2) اضغط زر المشاركة.\\n3) اختر «إضافة إلى الشاشة الرئيسية».\\n4) اضغط «إضافة».');
+        } else if (!isStandalone) {
+            alert('إذا لم يظهر خيار التثبيت، افتح قائمة المتصفح ثم اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».');
+        }
+    });
+
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((error) => {
+                console.warn('تعذر تسجيل Service Worker:', error);
+            });
+        });
+    }
+
 </script>
 
 </body>

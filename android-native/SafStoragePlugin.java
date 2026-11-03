@@ -150,6 +150,38 @@ public class SafStoragePlugin extends Plugin {
         } catch (Exception e) { call.reject("تعذرت كتابة الملف على الفلاش: " + e.getMessage(), e); }
     }
 
+
+    @PluginMethod
+    public void testStorage(PluginCall call) {
+        DocumentFile dir = folder(call); if (dir == null) return;
+        String testName = ".saadps2_test_" + System.currentTimeMillis() + ".tmp";
+        byte[] expected = ("SaadPS2-" + System.currentTimeMillis()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        DocumentFile testFile = null;
+        try {
+            testFile = dir.createFile("application/octet-stream", testName);
+            if (testFile == null || !testFile.canWrite()) throw new IllegalStateException("تعذر إنشاء ملف اختبار؛ تحقق من صلاحية الكتابة أو دعم وحدة التخزين");
+            try (java.io.OutputStream out = getContext().getContentResolver().openOutputStream(testFile.getUri(), "wt")) {
+                if (out == null) throw new IllegalStateException("تعذر فتح ملف الاختبار للكتابة");
+                out.write(expected); out.flush();
+            }
+            byte[] actual;
+            try (InputStream in = getContext().getContentResolver().openInputStream(testFile.getUri());
+                 ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+                if (in == null) throw new IllegalStateException("تعذر قراءة ملف الاختبار");
+                byte[] chunk = new byte[256]; int count;
+                while ((count = in.read(chunk)) >= 0) buffer.write(chunk, 0, count);
+                actual = buffer.toByteArray();
+            }
+            if (!java.util.Arrays.equals(expected, actual)) throw new IllegalStateException("اختبار الكتابة والقراءة غير متطابق؛ قد لا يدعم موفر USB الكتابة بصورة سليمة");
+            JSObject ret = new JSObject(); ret.put("readable", true); ret.put("writable", true); ret.put("verified", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("فشل اختبار وحدة التخزين: " + e.getMessage(), e);
+        } finally {
+            if (testFile != null) testFile.delete();
+        }
+    }
+
     @PluginMethod
     public void createDirectory(PluginCall call) {
         DocumentFile dir = folder(call); if (dir == null) return;

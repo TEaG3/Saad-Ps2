@@ -119,16 +119,28 @@ public class SafStoragePlugin extends Plugin {
         DocumentFile dir = folder(call); if (dir == null) return;
         String name = call.getString("name"); String encoded = call.getString("data");
         if (name == null || encoded == null) { call.reject("اسم الملف ومحتواه مطلوبان"); return; }
+        if (name.contains("/") || name.contains("\\\\") || name.equals(".") || name.equals("..")) {
+            call.reject("اسم الملف غير صالح"); return;
+        }
         try {
+            byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
             DocumentFile file = dir.findFile(name);
+            if (file != null && !file.isFile()) throw new IllegalStateException("يوجد مجلد بالاسم نفسه");
             if (file == null) file = dir.createFile(name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg", name);
-            if (file == null) throw new IllegalStateException("تعذر إنشاء الملف");
-            try (java.io.OutputStream out = getContext().getContentResolver().openOutputStream(file.getUri(), "wt")) {
-                if (out == null) throw new IllegalStateException("تعذرت الكتابة");
-                out.write(Base64.decode(encoded, Base64.DEFAULT));
+            if (file == null || !file.canWrite()) throw new IllegalStateException("تعذر إنشاء ملف قابل للكتابة");
+            java.io.OutputStream stream = getContext().getContentResolver().openOutputStream(file.getUri(), "wt");
+            if (stream == null) throw new IllegalStateException("مزود التخزين لم يفتح الملف للكتابة");
+            try (java.io.OutputStream out = stream) { out.write(bytes); out.flush(); }
+            long savedLength = file.length();
+            if (savedLength > 0 && savedLength != bytes.length) {
+                throw new IllegalStateException("لم تُحفظ كل بيانات الصورة؛ أعد المحاولة أو افحص الفلاش");
             }
-            JSObject ret = new JSObject(); ret.put("name", name); ret.put("uri", file.getUri().toString()); call.resolve(ret);
-        } catch (Exception e) { call.reject("تعذرت كتابة الملف", e); }
+            JSObject ret = new JSObject();
+            ret.put("name", name);
+            ret.put("uri", file.getUri().toString());
+            ret.put("bytesWritten", bytes.length);
+            call.resolve(ret);
+        } catch (Exception e) { call.reject("تعذرت كتابة الملف على الفلاش: " + e.getMessage(), e); }
     }
 
     @PluginMethod

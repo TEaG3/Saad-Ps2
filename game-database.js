@@ -74,7 +74,8 @@
         store.put({
           ...previous,
           gameId: id,
-          title: String(game.title || previous.title || id),
+          title: previous.catalogTitle || String(game.title || previous.title || id),
+          detectedTitle: String(game.title || previous.detectedTitle || id),
           format: game.format || previous.format || 'UNKNOWN',
           firstSeen: previous.firstSeen || now,
           lastSeen: now,
@@ -121,6 +122,9 @@
             ...previous,
             ...item,
             gameId: id,
+            catalogTitle: item.title || previous.catalogTitle || null,
+            catalogRecord: true,
+            title: item.title || previous.title || id,
             firstSeen: previous.firstSeen || item.firstSeen || null,
             lastSeen: previous.lastSeen || null,
             source: previous.source || 'central-catalog'
@@ -152,12 +156,32 @@
     lastSync = db ? await getMeta('lastSync') : null;
     return {
       localCount: games.filter(game => game.source === 'local-scan' || game.lastSeen).length,
-      catalogCount: games.filter(game => game.source === 'central-catalog' || game.publisher || game.releaseYear || game.description).length,
+      catalogCount: games.filter(game => game.catalogRecord).length,
       totalCount: games.length,
       catalogVersion,
       lastSync,
       status: catalogStatus
     };
+  }
+
+  async function enrichGames(scannedGames) {
+    const records = await getAllGames();
+    const byId = new Map(records.map(record => [record.gameId, record]));
+    return scannedGames.map(game => {
+      const record = byId.get(String(game.gameId).toUpperCase().replace('-', '_'));
+      if (!record) return game;
+      return {
+        ...game,
+        title: record.catalogTitle || game.title,
+        databaseRecord: record,
+        publisher: record.publisher || '',
+        developer: record.developer || '',
+        releaseYear: record.releaseYear || '',
+        region: record.region || '',
+        genre: record.genre || '',
+        description: record.description || ''
+      };
+    });
   }
 
   async function exportBackup() {
@@ -177,5 +201,5 @@
     return true;
   }
 
-  window.SaadGameDB = { init, recordScan, syncCatalog, getStats, exportBackup, getAllGames };
+  window.SaadGameDB = { init, recordScan, syncCatalog, getStats, exportBackup, getAllGames, enrichGames };
 })();

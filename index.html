@@ -554,7 +554,7 @@
     const FETCH_TIMEOUT_MS = 12000; // مهلة كل طلب
     const ICON_MAX_SIDE = 128;      // أكبر بُعد للأيقونة بالبكسل
     const RAW_BASE = 'https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default';
-    const GAMETDB_REGION = { SLUS: 'US', SCUS: 'US', SLES: 'EN', SCES: 'EN', SCED: 'EN', SLED: 'EN', SLPS: 'JA', SLPM: 'JA', SCPS: 'JA', SCAJ: 'JA' };
+    const GAMETDB_REGION = { SLUS: 'US', SCUS: 'US', SLES: 'EN', SCES: 'EN', SCED: 'EN', SLED: 'EN', SLKA: 'KO', SCKA: 'KO', SLPS: 'JA', SLPM: 'JA', SCPS: 'JA', SCAJ: 'JA' };
 
     // ---------- الحالة ----------
     let usbRootHandle = null;
@@ -743,14 +743,13 @@
 
     function onlineCoverUrls(gameId) {
         const v = idVariants(gameId);
-        const urls = [
-            `${RAW_BASE}/${v.serial}.jpg`,
-            `${RAW_BASE}/${v.dashDot}.jpg`,
-            `${RAW_BASE}/${v.dot}.jpg`
-        ];
+        // الأولوية: أغلفة PS2 القياسية من xlenore، ثم GameTDB، ثم صيغ أسماء بديلة للتوافق.
+        // لا نستخدم أغلفة 3D هنا حتى لا نستبدل غلاف OPL الأمامي بصورة صندوق ثلاثية الأبعاد.
+        const urls = [`${RAW_BASE}/${v.serial}.jpg`];
         const region = GAMETDB_REGION[v.prefix];
         if (region) urls.push(`https://art.gametdb.com/ps2/cover/${region}/${v.serial}.jpg`);
-        return urls;
+        urls.push(`${RAW_BASE}/${v.dashDot}.jpg`, `${RAW_BASE}/${v.dot}.jpg`);
+        return [...new Set(urls)];
     }
 
     async function fetchWithTimeout(url) {
@@ -1053,28 +1052,29 @@
         render();
     }
 
-    // فحص واحد ثم مزامنة كل الأغلفة/الأيقونات الناقصة تلقائياً.
-    // لا يعيد تنزيل الملفات الموجودة، ويشتق الأيقونة من الغلاف المحلي عند الحاجة.
+    // الفحص لا يكتب أي صور تلقائياً: يعرض النتائج والمعاينات أولاً، والتنزيل يبدأ بأمر المستخدم.
+    // يحافظ هذا على الملفات الحالية ويمنع تغيير محتويات ART/ICONS دون موافقة.
     async function scanAndSyncArtwork() {
         await scanUsbDrive();
-        if (!detectedGames.length) return;
-
-        const missing = detectedGames.filter(isMissing);
-        if (!missing.length) {
-            $('progressWrapper').style.display = 'block';
-            $('progressText').textContent = 'كل الأغلفة والأيقونات موجودة بالفعل — لا حاجة لإعادة التنزيل.';
-            $('progressCount').textContent = `0 / 0`;
-            $('progressBar').style.width = '100%';
-            return;
-        }
-
-        if (sourceMode.value === 'offline' && !offlineFolderHandle) {
-            $('report').textContent = 'تم فحص الألعاب. اختر مجلد الصور الأوفلاين ثم اضغط «مزامنة الأغلفة الناقصة».';
+        if (!detectedGames.length) {
+            $('report').textContent = 'لم يتم العثور على ألعاب قابلة للتعرّف. تأكد من وجود DVD أو CD أو ul.cfg في جذر الفلاش.';
             $('report').style.display = 'block';
             return;
         }
 
-        await runBatch(missing, false);
+        const missing = detectedGames.filter(isMissing);
+        $('progressWrapper').style.display = 'none';
+        const report = $('report');
+        report.style.display = 'block';
+        if (!missing.length) {
+            report.textContent = `اكتمل الفحص: ${detectedGames.length} لعبة، وجميع الأغلفة والأيقونات موجودة. لم يتم تغيير أي ملف.`;
+            return;
+        }
+        if (sourceMode.value === 'offline' && !offlineFolderHandle) {
+            report.textContent = `اكتمل الفحص: ${detectedGames.length} لعبة، منها ${missing.length} تحتاج صوراً. اختر مجلد الصور الأوفلاين، ثم اضغط «مزامنة الأغلفة الناقصة». لم يتم تنزيل أو استبدال أي ملف.`;
+            return;
+        }
+        report.textContent = `اكتمل الفحص والمعاينة: ${detectedGames.length} لعبة، منها ${missing.length} تحتاج غلافاً أو أيقونة. راجع المعاينات ثم اضغط «مزامنة الأغلفة الناقصة» لبدء الحفظ. لم يتم تغيير ملفات الفلاش أثناء الفحص.`;
     }
 
     // ---------- العرض ----------
@@ -1449,7 +1449,7 @@
     });
 
     // ---------- التحديثات: بيانات الويب + إشعار إصدار Android ----------
-    const APP_VERSION = '1.0.2';
+    const APP_VERSION = '1.0.3';
     const RELEASE_PAGE = 'https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest';
     const updateNotice = $('appUpdateNotice');
     const dismissedVersionKey = 'saadps2-dismissed-app-version';

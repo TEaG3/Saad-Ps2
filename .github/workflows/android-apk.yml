@@ -30,7 +30,9 @@ jobs:
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html manifest.webmanifest sw.js icon.svg www/
+          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js www/
+      - name: Bundle native plugin proxy
+        run: npx esbuild android-native/saf-storage-bridge.js --bundle --format=iife --outfile=www/saf-storage-bridge.bundle.js
       - name: Generate Android project
         run: npx cap add android
       - name: Install native SAF bridge

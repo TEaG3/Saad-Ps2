@@ -10,6 +10,8 @@ on:
       - 'capacitor.config.ts'
       - 'package.json'
       - 'saf-storage-bridge.bundle.js'
+      - 'game-database.js'
+      - 'database/**'
       - 'android-native/**'
       - '.github/workflows/android-apk.yml'
 permissions:
@@ -31,7 +33,9 @@ jobs:
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js www/
+          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
+          mkdir -p www/database
+          cp database/manifest.json database/catalog.json www/database/
       - name: Bundle native plugin proxy
         run: npx esbuild android-native/saf-storage-bridge.js --bundle --format=iife --outfile=www/saf-storage-bridge.bundle.js
       - name: Generate Android project

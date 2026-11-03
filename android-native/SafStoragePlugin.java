@@ -77,8 +77,8 @@ public class SafStoragePlugin extends Plugin {
     public void readFileRange(PluginCall call) {
         DocumentFile dir = folder(call); if (dir == null) return;
         String name = call.getString("name");
-        long offset = Math.max(0, call.getLong("offset", 0L));
-        int length = (int)Math.max(0, Math.min(8L * 1024 * 1024, call.getLong("length", 0L)));
+        long offset = Math.max(0, call.getData().optLong("offset", 0L));
+        int length = (int)Math.max(0, Math.min(8L * 1024 * 1024, call.getData().optLong("length", 0L)));
         DocumentFile file = name == null ? null : dir.findFile(name);
         if (file == null || !file.isFile()) { call.reject("الملف غير موجود: " + name); return; }
         try (InputStream in = getContext().getContentResolver().openInputStream(file.getUri());

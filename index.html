@@ -276,6 +276,16 @@
         }
         .hero p { color: var(--text-muted); max-width: 620px; margin: 0 auto 26px; line-height: 1.9; font-size: 16px; }
 
+        .android-download-card {
+            margin: 0 auto 34px; max-width: 760px; padding: 24px;
+            border: 1px solid rgba(0,210,255,.45); border-radius: 18px;
+            background: linear-gradient(135deg, rgba(37,99,235,.22), rgba(0,210,255,.08));
+            box-shadow: 0 14px 36px rgba(0,0,0,.24); text-align: center;
+        }
+        .android-download-card h2 { font-size: clamp(22px,4vw,30px); margin-bottom: 8px; }
+        .android-download-card p { color: var(--text-muted); line-height: 1.8; margin: 0 auto 16px; }
+        .android-download-card .download-main { font-size: 17px; padding: 14px 28px; }
+
         .section-title { font-size: 22px; margin: 36px 0 6px; }
         .section-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 18px; line-height: 1.8; }
 
@@ -364,6 +374,17 @@
             <a class="btn-link ghost" href="#browse">ابدأ باستخدام الموقع ↓</a>
         </div>
         <p style="font-size:12px;margin-top:12px;color:var(--text-muted);">نسخة Android قابلة للتثبيت. فعّل السماح بالتثبيت من هذا المصدر عند الحاجة.</p>
+    </section>
+
+    <section class="android-download-card" id="androidDownloadSection">
+        <span class="eyebrow">ANDROID APP</span>
+        <h2>حمّل تطبيق Saad PS2 لهاتفك</h2>
+        <p>احصل على نسخة Android بصيغة APK. اضغط على الزر لتنزيل ملف التثبيت مباشرةً، أو افتح صفحة الإصدارات لمعرفة آخر التحديثات.</p>
+        <div class="btn-group">
+            <a class="btn-link download-main" href="https://github.com/TEaG3/Saad-Ps2/releases/download/android-latest/app-debug.apk">⬇️ تنزيل تطبيق Saad PS2 (APK)</a>
+            <a class="btn-link ghost" href="https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest">تفاصيل الإصدار</a>
+        </div>
+        <p style="font-size:12px;margin:14px 0 0;">ملف التثبيت: app-debug.apk · Android</p>
     </section>
 
     <div class="notice" id="unsupportedNotice" hidden>

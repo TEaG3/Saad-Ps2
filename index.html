@@ -544,8 +544,9 @@
     $('viewList').addEventListener('click', () => setView('list'));
     btnRescan.addEventListener('click', () => { if (usbRootHandle && !isBusy) scanUsbDrive(); });
 
-    const nativeSaf = window.SafStorage || (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SafStorage)
-        ? (window.SafStorage || window.Capacitor.Plugins.SafStorage) : null;
+    const nativeSaf = window.SafStorage ||
+        (window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins.SafStorage : null) ||
+        null;
     const isNativeAndroid = !!(nativeSaf && window.Capacitor.isNativePlatform && window.Capacitor.getPlatform() === 'android');
     const supportsFsApi = ('showDirectoryPicker' in window) || isNativeAndroid;
     if (!supportsFsApi) $('unsupportedNotice').hidden = false;

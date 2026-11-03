@@ -21,7 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,6 +36,7 @@ jobs:
       - name: Install native SAF bridge
         run: |
           mkdir -p android/app/src/main/java/com/saadps2/artwork
+          rm -f android/app/src/main/java/com/saadps2/artwork/MainActivity.java
           cp android-native/MainActivity.kt android/app/src/main/java/com/saadps2/artwork/MainActivity.kt
           cp android-native/SafStoragePlugin.kt android/app/src/main/java/com/saadps2/artwork/SafStoragePlugin.kt
           printf '\ndependencies {\n    implementation "androidx.documentfile:documentfile:1.0.1"\n}\n' >> android/app/build.gradle

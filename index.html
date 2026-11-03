@@ -490,6 +490,7 @@
     </div>
 </div>
 
+<script src="./saf-storage-bridge.bundle.js"></script>
 <script>
     // ---------- الإعدادات ----------
     const CONCURRENCY = 4;          // عدد التحميلات المتوازية
@@ -543,8 +544,8 @@
     $('viewList').addEventListener('click', () => setView('list'));
     btnRescan.addEventListener('click', () => { if (usbRootHandle && !isBusy) scanUsbDrive(); });
 
-    const nativeSaf = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SafStorage
-        ? window.Capacitor.Plugins.SafStorage : null;
+    const nativeSaf = window.SafStorage || (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SafStorage)
+        ? (window.SafStorage || window.Capacitor.Plugins.SafStorage) : null;
     const isNativeAndroid = !!(nativeSaf && window.Capacitor.isNativePlatform && window.Capacitor.getPlatform() === 'android');
     const supportsFsApi = ('showDirectoryPicker' in window) || isNativeAndroid;
     if (!supportsFsApi) $('unsupportedNotice').hidden = false;

@@ -119,7 +119,7 @@ public class SafStoragePlugin extends Plugin {
         DocumentFile dir = folder(call); if (dir == null) return;
         String name = call.getString("name"); String encoded = call.getString("data");
         if (name == null || encoded == null) { call.reject("اسم الملف ومحتواه مطلوبان"); return; }
-        if (name.contains("/") || name.contains("\\\\") || name.equals(".") || name.equals("..")) {
+        if (name.contains("/") || name.contains("\\") || name.equals(".") || name.equals("..")) {
             call.reject("اسم الملف غير صالح"); return;
         }
         try {
@@ -131,9 +131,16 @@ public class SafStoragePlugin extends Plugin {
             java.io.OutputStream stream = getContext().getContentResolver().openOutputStream(file.getUri(), "wt");
             if (stream == null) throw new IllegalStateException("مزود التخزين لم يفتح الملف للكتابة");
             try (java.io.OutputStream out = stream) { out.write(bytes); out.flush(); }
-            long savedLength = file.length();
-            if (savedLength > 0 && savedLength != bytes.length) {
-                throw new IllegalStateException("لم تُحفظ كل بيانات الصورة؛ أعد المحاولة أو افحص الفلاش");
+            // Verify the bytes through the Storage Access Framework itself. Some USB
+            // document providers report a stale/zero length immediately after writing.
+            long verifiedLength = 0;
+            try (InputStream verify = getContext().getContentResolver().openInputStream(file.getUri())) {
+                if (verify == null) throw new IllegalStateException("تعذر التحقق من الملف بعد الحفظ");
+                byte[] check = new byte[8192]; int count;
+                while ((count = verify.read(check)) >= 0) verifiedLength += count;
+            }
+            if (verifiedLength != bytes.length) {
+                throw new IllegalStateException("التحقق من الحفظ غير مكتمل (" + verifiedLength + "/" + bytes.length + " بايت). افحص الفلاش وأعد المحاولة.");
             }
             JSObject ret = new JSObject();
             ret.put("name", name);

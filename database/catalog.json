@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.0",
+  "updatedAt": "2026-11-03",
+  "description": "Central metadata catalog for Saad PS2. Only verified metadata belongs here; empty until verified game records are curated.",
+  "games": []
+}

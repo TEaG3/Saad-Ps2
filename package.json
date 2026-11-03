@@ -1,0 +1,17 @@
+{
+  "name": "saad-ps2-artwork-station",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Saad PS2 Artwork Station Android wrapper",
+  "scripts": {
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1"
+  }
+}

@@ -40,6 +40,45 @@ jobs:
         run: npx esbuild android-native/saf-storage-bridge.js --bundle --format=iife --outfile=www/saf-storage-bridge.bundle.js
       - name: Generate Android project
         run: npx cap add android
+      - name: Generate Saad PS2 launcher icon
+        run: |
+          pip install --quiet pillow
+          mkdir -p android/app/src/main/res/mipmap-mdpi android/app/src/main/res/mipmap-hdpi android/app/src/main/res/mipmap-xhdpi android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/mipmap-xxxhdpi android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/values
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw, ImageFont
+          import os
+          sizes = {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}
+          def make_icon(size, transparent=False):
+              im = Image.new('RGBA',(size,size),(0,0,0,0) if transparent else (15,23,42,255))
+              d = ImageDraw.Draw(im)
+              pad = int(size*.06)
+              box=(pad,pad,size-pad,size-pad)
+              radius=int(size*.23)
+              for y in range(pad,size-pad):
+                  t=(y-pad)/max(1,size-2*pad)
+                  c=(int(40*(1-t)+8*t),int(103*(1-t)+201*t),int(255*(1-t)+239*t),255)
+                  d.line((pad,y,size-pad,y),fill=c)
+              mask=Image.new('L',(size,size),0); md=ImageDraw.Draw(mask); md.rounded_rectangle(box,radius=radius,fill=255)
+              im.putalpha(mask)
+              draw=ImageDraw.Draw(im)
+              try: font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',int(size*.29))
+              except: font=ImageFont.load_default()
+              text='PS2'; bb=draw.textbbox((0,0),text,font=font,stroke_width=0)
+              x=(size-(bb[2]-bb[0]))/2; y=(size-(bb[3]-bb[1]))/2-bb[1]
+              draw.text((x,y),text,font=font,fill='white')
+              return im
+          for density,size in sizes.items():
+              make_icon(size).save(f'android/app/src/main/res/mipmap-{density}/ic_launcher.png')
+              make_icon(size).save(f'android/app/src/main/res/mipmap-{density}/ic_launcher_round.png')
+          make_icon(432,True).save('android/app/src/main/res/drawable/ic_launcher_foreground.png')
+          PY
+          cat > android/app/src/main/res/values/ic_launcher_background.xml <<'EOF'
+          <resources><color name="ic_launcher_background">#10234A</color></resources>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/ic_launcher_background"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
       - name: Install native SAF bridge
         run: |
           mkdir -p android/app/src/main/java/com/saadps2/artwork

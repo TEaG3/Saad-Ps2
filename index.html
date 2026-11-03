@@ -1042,6 +1042,7 @@
         if (window.SaadGameDB) {
             try {
                 await window.SaadGameDB.recordScan(detectedGames);
+                detectedGames = await window.SaadGameDB.enrichGames(detectedGames);
                 await refreshDatabasePanel();
             } catch (dbError) {
                 console.warn('تعذر حفظ نتائج الفحص في قاعدة البيانات المحلية:', dbError);

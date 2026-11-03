@@ -34,9 +34,21 @@ public class SafStoragePlugin extends Plugin {
 
     private DocumentFile folder(PluginCall call) {
         String raw = call.getString("uri");
-        if (raw == null || raw.isEmpty()) { call.reject("عنوان المجلد مطلوب"); return null; }
+        if (raw == null || raw.isEmpty()) { call.reject("عنوان مجلد التخزين مطلوب"); return null; }
         DocumentFile dir = DocumentFile.fromTreeUri(getContext(), Uri.parse(raw));
-        if (dir == null || !dir.isDirectory()) { call.reject("المجلد غير متاح"); return null; }
+        if (dir == null || !dir.isDirectory()) { call.reject("مجلد التخزين غير متاح"); return null; }
+        String relativePath = call.getString("path", "");
+        if (relativePath != null && !relativePath.isEmpty()) {
+            for (String part : relativePath.split("/")) {
+                if (part.isEmpty() || part.equals(".") || part.equals("..")) continue;
+                DocumentFile child = dir.findFile(part);
+                if (child == null || !child.isDirectory()) {
+                    call.reject("المجلد الفرعي غير موجود: " + part);
+                    return null;
+                }
+                dir = child;
+            }
+        }
         return dir;
     }
 

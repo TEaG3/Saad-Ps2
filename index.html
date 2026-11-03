@@ -286,6 +286,10 @@
         .android-download-card p { color: var(--text-muted); line-height: 1.8; margin: 0 auto 16px; }
         .android-download-card .download-main { font-size: 17px; padding: 14px 28px; }
 
+
+        .update-notice { display:none; max-width:760px; margin:0 auto 24px; padding:18px 22px; border:1px solid rgba(16,185,129,.45); border-radius:14px; background:rgba(16,185,129,.10); line-height:1.8; }
+        .update-notice strong { color:#6ee7b7; }
+
         .section-title { font-size: 22px; margin: 36px 0 6px; }
         .section-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 18px; line-height: 1.8; }
 
@@ -385,6 +389,16 @@
             <a class="btn-link ghost" href="https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest">تفاصيل الإصدار</a>
         </div>
         <p style="font-size:12px;margin:14px 0 0;">ملف التثبيت: app-debug.apk · Android</p>
+    </section>
+
+    <section class="update-notice" id="appUpdateNotice" role="status" aria-live="polite">
+        <strong id="appUpdateTitle">يتوفر تحديث جديد لـ Saad PS2</strong>
+        <p id="appUpdateText">يوجد إصدار أحدث من التطبيق.</p>
+        <div class="btn-group" style="justify-content:flex-start;">
+            <a class="btn-link" id="appUpdateLink" href="https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest" target="_blank" rel="noopener">عرض التحديث وتنزيله</a>
+            <button class="btn-secondary" id="dismissAppUpdate" type="button">لاحقاً</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">لن يتم تثبيت أي تحديث دون موافقتك. يتطلب Android تأكيد التثبيت يدوياً.</p>
     </section>
 
     <div class="notice" id="unsupportedNotice" hidden>
@@ -1346,6 +1360,53 @@
     window.addEventListener('beforeunload', e => {
         if (isBusy) { e.preventDefault(); e.returnValue = ''; }
     });
+
+    // ---------- التحديثات: بيانات الويب + إشعار إصدار Android ----------
+    const APP_VERSION = '1.0.1';
+    const RELEASE_PAGE = 'https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest';
+    const updateNotice = $('appUpdateNotice');
+    const dismissedVersionKey = 'saadps2-dismissed-app-version';
+
+    function compareVersions(a, b) {
+        const aa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+        const bb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
+            const x = aa[i] || 0, y = bb[i] || 0;
+            if (x > y) return 1;
+            if (x < y) return -1;
+        }
+        return 0;
+    }
+
+    async function checkForAppUpdate() {
+        if (!updateNotice) return;
+        try {
+            const response = await fetch('https://raw.githubusercontent.com/TEaG3/Saad-Ps2/main/package.json?check=' + Date.now(), { cache: 'no-store' });
+            if (!response.ok) return;
+            const remotePackage = await response.json();
+            const latestVersion = remotePackage.version;
+            if (!latestVersion || compareVersions(latestVersion, APP_VERSION) <= 0) return;
+            if (localStorage.getItem(dismissedVersionKey) === latestVersion) return;
+            $('appUpdateTitle').textContent = 'يتوفر تحديث جديد لـ Saad PS2';
+            $('appUpdateText').textContent = 'الإصدار المثبت: ' + APP_VERSION + ' — الإصدار المتاح: ' + latestVersion + '. يمكنك مراجعة تفاصيل الإصدار قبل التثبيت.';
+            $('appUpdateLink').href = RELEASE_PAGE;
+            updateNotice.style.display = 'block';
+        } catch (error) {
+            console.info('تعذر التحقق من تحديث التطبيق حالياً؛ سيستمر التطبيق بالعمل بشكل طبيعي.', error);
+        }
+    }
+
+    $('dismissAppUpdate').addEventListener('click', async () => {
+        try {
+            const response = await fetch('https://raw.githubusercontent.com/TEaG3/Saad-Ps2/main/package.json?check=' + Date.now(), { cache: 'no-store' });
+            const latest = response.ok ? (await response.json()).version : '';
+            if (latest) localStorage.setItem(dismissedVersionKey, latest);
+        } catch (e) {}
+        updateNotice.style.display = 'none';
+    });
+
+    // يجلب أحدث بيانات إصدار الموقع عند كل تشغيل؛ Service Worker يتحقق من ملفات الواجهة عبر الشبكة.
+    checkForAppUpdate();
 
     // ---------- تثبيت التطبيق والعمل دون اتصال ----------
     const installAppBtn = document.getElementById('installAppBtn');

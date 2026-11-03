@@ -3,6 +3,7 @@ package com.saadps2.artwork;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Base64;
+import androidx.activity.result.ActivityResult;
 import androidx.documentfile.provider.DocumentFile;
 import com.getcapacitor.*;
 import com.getcapacitor.annotation.*;

@@ -701,7 +701,12 @@
         const picked = await nativeSaf.pickFolder();
         if (!picked || !picked.uri) throw new Error('لم يتم اختيار مجلد تخزين صالح');
         if (picked.canWrite === false) throw new Error('المجلد المحدد لا يسمح بالكتابة. اختر جذر الفلاش أو مجلداً يتيح القراءة والكتابة.');
-        return new NativeDirectoryHandle(picked.uri, picked.name, []);
+        const root = new NativeDirectoryHandle(picked.uri, picked.name, []);
+        if (typeof nativeSaf.testStorage === 'function') {
+            try { await nativeSaf.testStorage({ uri: picked.uri, path: '' }); }
+            catch (e) { throw new Error('فشل اختبار القراءة والكتابة. قد لا يتيح موفر USB الكتابة عبر Android SAF. اختر جذر الفلاش مباشرة أو جرّب مدير ملفات آخر. التفاصيل: ' + (e && e.message ? e.message : e)); }
+        }
+        return root;
     }
 
     // ---------- أدوات مساعدة ----------
@@ -795,13 +800,27 @@
     }
 
     async function writeFile(directoryHandle, fileName, data) {
-        const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        try {
-            await writable.write(data);
-        } finally {
-            await writable.close();
+        let lastError;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                try { await writable.write(data); } finally { await writable.close(); }
+                const saved = await fileHandle.getFile();
+                if (!saved || saved.size !== data.size) throw new Error('حجم الملف بعد الحفظ غير مطابق (' + (saved ? saved.size : 0) + '/' + data.size + ' بايت)');
+                if (typeof saved.arrayBuffer === 'function' && typeof data.arrayBuffer === 'function') {
+                    const [a,b] = await Promise.all([saved.arrayBuffer(),data.arrayBuffer()]);
+                    const aa=new Uint8Array(a), bb=new Uint8Array(b);
+                    if (aa.length !== bb.length) throw new Error('حجم الملف المقروء غير مطابق');
+                    for(let i=0;i<aa.length;i++) if(aa[i]!==bb[i]) throw new Error('محتوى الملف المحفوظ غير مطابق');
+                }
+                return;
+            } catch(error) {
+                lastError=error;
+                if(attempt<3) await new Promise(resolve=>setTimeout(resolve,350*attempt));
+            }
         }
+        throw new Error('فشل حفظ '+fileName+' بعد 3 محاولات: '+(lastError&&lastError.message?lastError.message:lastError));
     }
 
     async function listDir(dirHandle) {
@@ -1372,11 +1391,13 @@
 
     function showReport(successful, failed, skipped) {
         const el = $('report');
-        let html = `<strong>النتيجة:</strong> نجح ${successful}، تعذّر ${failed.length}` + (skipped ? `، لم تُعالج ${skipped}` : '') + '.';
+        const total = successful + failed.length + skipped;
+        let html = '<strong>تقرير الحفظ والتحقق:</strong> من ' + total + ' لعبة: نجح حفظ ' + successful + '، فشل ' + failed.length + (skipped ? '، لم تُعالج ' + skipped : '') + '.';
+        html += '<p style="color:var(--text-muted);margin-top:8px;font-size:12px;">لا تُحتسب الصورة ناجحة إلا بعد قراءة الملف المحفوظ والتحقق من حجمه. تتم إعادة محاولة الحفظ تلقائياً حتى 3 مرات.</p>';
         if (failed.length) {
-            html += '<ul>' + failed.map(g => `<li>${escapeHtml(g.title)} <span dir="ltr">(${escapeHtml(g.gameId)})</span>${g.lastError ? ' — ' + escapeHtml(g.lastError) : ''}</li>`).join('') + '</ul>';
+            html += '<ul>' + failed.map(g => '<li>' + escapeHtml(g.title) + ' <span dir="ltr">(' + escapeHtml(g.gameId) + ')</span>' + (g.lastError ? ' — ' + escapeHtml(g.lastError) : '') + '</li>').join('') + '</ul>';
             html += '<div class="report-actions"><button class="btn-warning btn-small" id="btnRetry">🔁 إعادة محاولة الفاشل</button></div>';
-            html += '<p style="color:var(--text-muted); margin-top:8px; font-size:12px;">للألعاب التي لا يوجد لها غلاف في المصدر، استخدم زر «صورة يدوية» في صفها.</p>';
+            html += '<p style="color:var(--warning);margin-top:8px;font-size:12px;">إذا تكرر الخطأ، تحقق من صلاحيات المجلد ومساحة الفلاش واتصال OTG. وقد تكون المشكلة من موفر ملفات Android مع exFAT.</p>';
         }
         el.innerHTML = html;
         el.style.display = 'block';
@@ -1423,8 +1444,10 @@
             await ensureDirs();
             await saveArtwork(game, file, { cover: true, icon: true });
             render();
+            $('report').textContent = 'تم حفظ الغلاف والأيقونة والتحقق من الملفات على وحدة التخزين.';
+            $('report').style.display = 'block';
         } catch (err) {
-            alert('تعذر استخدام هذه الصورة. تأكد أنها صورة صالحة وأن الفلاش قابل للكتابة.');
+            alert('تعذر حفظ الصورة والتحقق منها: ' + (err && err.message ? err.message : err));
         }
     });
 

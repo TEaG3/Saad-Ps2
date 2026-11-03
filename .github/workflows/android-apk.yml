@@ -13,7 +13,7 @@ on:
       - 'android-native/**'
       - '.github/workflows/android-apk.yml'
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -54,3 +54,17 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Publish APK on project download page
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: Saad PS2 - Latest Android APK
+          body: |
+            أحدث نسخة Android من Saad PS2.
+            يتم تحديث هذا الإصدار تلقائياً عند نجاح بناء APK جديد.
+          prerelease: true
+          make_latest: false
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+          overwrite_files: true

@@ -530,8 +530,8 @@
     </div>
 
     <footer>
-        الأغلفة تُحفظ بصيغة OPL القياسية داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.jpg</code>،
-        والأيقونات داخل مجلد ICONS. يعمل على Chrome وEdge، ويدعم فلاش FAT32 وexFAT.<br>
+        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة JPG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.jpg</code>،
+        وأيقونات القرص بمقاس 64×64 بصيغة PNG داخل مجلد ICONS. يعمل على Chrome وEdge، وللاستخدام مع PS2 يُفضّل تهيئة الفلاش بنظام FAT32؛ توافق exFAT يعتمد على إصدار OPL ولا يُضمن.<br>
         كل المعالجة تتم داخل متصفحك، ولا يُرفع أي ملف من الفلاش إلى أي سيرفر.
     </footer>
 </div>
@@ -550,9 +550,11 @@
 <script src="./saf-storage-bridge.bundle.js"></script>
 <script>
     // ---------- الإعدادات ----------
-    const CONCURRENCY = 4;          // عدد التحميلات المتوازية
+    const CONCURRENCY = 1;          // معالجة صورة واحدة لتقليل استهلاك الذاكرة والضغط على USB
     const FETCH_TIMEOUT_MS = 12000; // مهلة كل طلب
-    const ICON_MAX_SIDE = 128;      // أكبر بُعد للأيقونة بالبكسل
+    const COVER_WIDTH = 140;        // المقاس القياسي لأغلفة OPL
+    const COVER_HEIGHT = 200;
+    const ICON_SIZE = 64;            // المقاس القياسي لأيقونة القرص في OPL
     const RAW_BASE = 'https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default';
     const GAMETDB_REGION = { SLUS: 'US', SCUS: 'US', SLES: 'EN', SCES: 'EN', SCED: 'EN', SLED: 'EN', SLKA: 'KO', SCKA: 'KO', SLPS: 'JA', SLPM: 'JA', SCPS: 'JA', SCAJ: 'JA' };
 
@@ -774,28 +776,39 @@
         });
     }
 
-    // غلاف JPEG حقيقي: نُبقي الملف كما هو إن كان JPEG، وإلا نحوّله
+    // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 مع قص مركزي يحافظ على التناسب.
+    // لا نكتب ملفات صور ضخمة إلى USB؛ JPEG بجودة متوازنة لتقليل الحجم والتحميل على PS2.
     async function toCoverJpeg(blob, bitmap) {
-        if (blob.type === 'image/jpeg') return blob;
         const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#fff'; // خلفية بيضاء بدل الشفافية عند التحويل إلى JPEG
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(bitmap, 0, 0);
-        return canvasToBlob(canvas, 'image/jpeg', 0.92);
+        canvas.width = COVER_WIDTH;
+        canvas.height = COVER_HEIGHT;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, COVER_WIDTH, COVER_HEIGHT);
+        const scale = Math.max(COVER_WIDTH / bitmap.width, COVER_HEIGHT / bitmap.height);
+        const drawWidth = bitmap.width * scale;
+        const drawHeight = bitmap.height * scale;
+        const dx = (COVER_WIDTH - drawWidth) / 2;
+        const dy = (COVER_HEIGHT - drawHeight) / 2;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
+        return canvasToBlob(canvas, 'image/jpeg', 0.82);
     }
 
-    // أيقونة PNG حقيقية مصغّرة
+    // أيقونة القرص: OPL القياسي 64×64 بصيغة PNG.
     async function toIconPng(bitmap) {
-        const scale = Math.min(1, ICON_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.width = ICON_SIZE;
+        canvas.height = ICON_SIZE;
         const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, ICON_SIZE, ICON_SIZE);
+        const scale = Math.min(ICON_SIZE / bitmap.width, ICON_SIZE / bitmap.height);
+        const drawWidth = bitmap.width * scale;
+        const drawHeight = bitmap.height * scale;
+        ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bitmap, (ICON_SIZE - drawWidth) / 2, (ICON_SIZE - drawHeight) / 2, drawWidth, drawHeight);
         return canvasToBlob(canvas, 'image/png');
     }
 

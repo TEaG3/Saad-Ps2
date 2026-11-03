@@ -393,7 +393,7 @@
     </div>
 
     <h2 class="section-title" id="browse">اختر مخزن الألعاب</h2>
-    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) وليس مجلد DVD أو CD بداخله. سيطلب Chrome أو Edge إذن الوصول للمجلد.</p>
+    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART وICONS دون فتح كل لعبة على حدة.</p>
 
     <div class="control-panel">
         <div class="browse-grid">
@@ -406,10 +406,10 @@
                     </select>
                 </div>
                 <div class="btn-group" style="justify-content:flex-start; margin-top:0;">
-                    <button id="btnSelectUsb" class="btn-primary">📁 اختر الفلاش ميموري (USB)</button>
+                    <button id="btnSelectUsb" class="btn-primary">📁 اختر الفلاش وابدأ المزامنة التلقائية</button>
                     <button id="btnRescan" class="btn-secondary" disabled>🔄 إعادة الفحص</button>
                     <button id="btnLocalOffline" class="btn-secondary" style="display:none;">🖼️ اختر مجلد الصور الأوفلاين</button>
-                    <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ تحميل الأغلفة الناقصة</button>
+                    <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ مزامنة الأغلفة الناقصة</button>
                     <button id="btnDownloadAll" class="btn-warning" disabled>🔄 تحميل وتحديث الكل</button>
                 </div>
             </div>
@@ -568,7 +568,7 @@
     }
     $('viewGrid').addEventListener('click', () => setView('grid'));
     $('viewList').addEventListener('click', () => setView('list'));
-    btnRescan.addEventListener('click', () => { if (usbRootHandle && !isBusy) scanUsbDrive(); });
+    btnRescan.addEventListener('click', () => { if (usbRootHandle && !isBusy) scanAndSyncArtwork(); });
 
     const nativeSaf = window.SafStorage ||
         (window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins.SafStorage : null) ||
@@ -821,7 +821,7 @@
             if (err && err.message) alert(err.message);
             return;
         }
-        await scanUsbDrive();
+        await scanAndSyncArtwork();
     });
 
     // قراءة SYSTEM.CNF من نظام ملفات ISO9660 (القطاع 2048 بايت) لاستخراج كود اللعبة بدقة
@@ -950,6 +950,30 @@
 
         await checkExistingArtwork(detectedGames);
         render();
+    }
+
+    // فحص واحد ثم مزامنة كل الأغلفة/الأيقونات الناقصة تلقائياً.
+    // لا يعيد تنزيل الملفات الموجودة، ويشتق الأيقونة من الغلاف المحلي عند الحاجة.
+    async function scanAndSyncArtwork() {
+        await scanUsbDrive();
+        if (!detectedGames.length) return;
+
+        const missing = detectedGames.filter(isMissing);
+        if (!missing.length) {
+            $('progressWrapper').style.display = 'block';
+            $('progressText').textContent = 'كل الأغلفة والأيقونات موجودة بالفعل — لا حاجة لإعادة التنزيل.';
+            $('progressCount').textContent = `0 / 0`;
+            $('progressBar').style.width = '100%';
+            return;
+        }
+
+        if (sourceMode.value === 'offline' && !offlineFolderHandle) {
+            $('report').textContent = 'تم فحص الألعاب. اختر مجلد الصور الأوفلاين ثم اضغط «مزامنة الأغلفة الناقصة».';
+            $('report').style.display = 'block';
+            return;
+        }
+
+        await runBatch(missing, false);
     }
 
     // ---------- العرض ----------

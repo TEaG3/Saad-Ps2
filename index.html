@@ -406,11 +406,11 @@
                     </select>
                 </div>
                 <div class="btn-group" style="justify-content:flex-start; margin-top:0;">
-                    <button id="btnSelectUsb" class="btn-primary">📁 اختر الفلاش وابدأ المزامنة التلقائية</button>
-                    <button id="btnRescan" class="btn-secondary" disabled>🔄 إعادة الفحص</button>
+                    <button id="btnSelectUsb" class="btn-primary">🔄 فحص الألعاب وجلب الأغلفة</button>
+                    <button id="btnRescan" class="btn-secondary" disabled>🔁 إعادة الفحص والمزامنة</button>
                     <button id="btnLocalOffline" class="btn-secondary" style="display:none;">🖼️ اختر مجلد الصور الأوفلاين</button>
-                    <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ مزامنة الأغلفة الناقصة</button>
-                    <button id="btnDownloadAll" class="btn-warning" disabled>🔄 تحميل وتحديث الكل</button>
+                    <button id="btnDownloadMissing" class="btn-success" disabled hidden>⬇️ مزامنة الأغلفة الناقصة</button>
+                    <button id="btnDownloadAll" class="btn-warning" disabled hidden>🔄 تحميل وتحديث الكل</button>
                 </div>
             </div>
             <div class="tree" aria-label="هيكل الفلاش المطلوب"><b>USB/</b>
@@ -1102,8 +1102,7 @@
         render();
     }
 
-    // الفحص لا يكتب أي صور تلقائياً: يعرض النتائج والمعاينات أولاً، والتنزيل يبدأ بأمر المستخدم.
-    // يحافظ هذا على الملفات الحالية ويمنع تغيير محتويات ART/ICONS دون موافقة.
+    // فحص المكتبة ثم مزامنة الصور الناقصة فقط؛ لا يستبدل أي ملف موجود.
     async function scanAndSyncArtwork() {
         await scanUsbDrive();
         if (!detectedGames.length) {
@@ -1121,10 +1120,11 @@
             return;
         }
         if (sourceMode.value === 'offline' && !offlineFolderHandle) {
-            report.textContent = `اكتمل الفحص: ${detectedGames.length} لعبة، منها ${missing.length} تحتاج صوراً. اختر مجلد الصور الأوفلاين، ثم اضغط «مزامنة الأغلفة الناقصة». لم يتم تنزيل أو استبدال أي ملف.`;
+            report.textContent = `اكتمل الفحص: ${detectedGames.length} لعبة، منها ${missing.length} تحتاج صوراً. اختر مجلد الصور الأوفلاين ثم أعد الضغط على «فحص الألعاب وجلب الأغلفة».`;
             return;
         }
-        report.textContent = `اكتمل الفحص والمعاينة: ${detectedGames.length} لعبة، منها ${missing.length} تحتاج غلافاً أو أيقونة. راجع المعاينات ثم اضغط «مزامنة الأغلفة الناقصة» لبدء الحفظ. لم يتم تغيير ملفات الفلاش أثناء الفحص.`;
+        report.textContent = `تم العثور على ${detectedGames.length} لعبة. ستبدأ الآن مزامنة ${missing.length} لعبة ينقصها غلاف أو أيقونة، مع الحفاظ على جميع الصور الموجودة.`;
+        await runBatch(missing, false);
     }
 
     // ---------- العرض ----------
@@ -1405,9 +1405,14 @@
         let cursor = 0;
 
         const tick = (label) => {
+            const percent = targets.length ? Math.round((completed / targets.length) * 100) : 100;
             $('progressText').textContent = label;
-            $('progressCount').textContent = `${completed} / ${targets.length}`;
-            $('progressBar').style.width = `${(completed / targets.length) * 100}%`;
+            $('progressCount').textContent = `${completed} / ${targets.length} — ${percent}%`;
+            $('progressBar').style.width = `${percent}%`;
+            $('progressBar').setAttribute('role', 'progressbar');
+            $('progressBar').setAttribute('aria-valuemin', '0');
+            $('progressBar').setAttribute('aria-valuemax', '100');
+            $('progressBar').setAttribute('aria-valuenow', String(percent));
         };
         tick('جاري البدء...');
 
@@ -1444,8 +1449,13 @@
     function showReport(successful, failed, skipped) {
         const el = $('report');
         const total = successful + failed.length + skipped;
-        let html = '<strong>تقرير الحفظ والتحقق:</strong> من ' + total + ' لعبة: نجح حفظ ' + successful + '، فشل ' + failed.length + (skipped ? '، لم تُعالج ' + skipped : '') + '.';
-        html += '<p style="color:var(--text-muted);margin-top:8px;font-size:12px;">لا تُحتسب الصورة ناجحة إلا بعد قراءة الملف المحفوظ والتحقق من حجمه. تتم إعادة محاولة الحفظ تلقائياً حتى 3 مرات.</p>';
+        const alreadyReady = detectedGames.filter(g => !isMissing(g)).length;
+        let html = '<strong>تقرير المزامنة:</strong> إجمالي الألعاب ' + detectedGames.length +
+            '؛ كانت مكتملة مسبقاً ' + alreadyReady +
+            '؛ تمت مزامنة ' + successful +
+            '؛ فشل ' + failed.length +
+            (skipped ? '؛ لم تُعالج بسبب الإيقاف ' + skipped : '') + '.';
+        html += '<p style="color:var(--text-muted);margin-top:8px;font-size:12px;">تم تخطي الصور الموجودة ولم تُستبدل. لا تُحتسب العملية ناجحة إلا بعد قراءة الملف المحفوظ والتحقق من محتواه وحجمه؛ وتتم إعادة المحاولة حتى 3 مرات عند فشل الكتابة.</p>';
         if (failed.length) {
             html += '<ul>' + failed.map(g => '<li>' + escapeHtml(g.title) + ' <span dir="ltr">(' + escapeHtml(g.gameId) + ')</span>' + (g.lastError ? ' — ' + escapeHtml(g.lastError) : '') + '</li>').join('') + '</ul>';
             html += '<div class="report-actions"><button class="btn-warning btn-small" id="btnRetry">🔁 إعادة محاولة الفاشل</button></div>';

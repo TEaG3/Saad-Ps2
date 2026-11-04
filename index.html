@@ -530,7 +530,7 @@
     </div>
 
     <footer>
-        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة JPG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.jpg</code>،
+        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة PNG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.png</code>،
         وأيقونات القرص بمقاس 64×64 بصيغة PNG داخل مجلد ICONS. يعمل على Chrome وEdge، وللاستخدام مع PS2 يُفضّل تهيئة الفلاش بنظام FAT32؛ توافق exFAT يعتمد على إصدار OPL ولا يُضمن.<br>
         كل المعالجة تتم داخل متصفحك، ولا يُرفع أي ملف من الفلاش إلى أي سيرفر.
     </footer>
@@ -777,8 +777,8 @@
     }
 
     // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 مع قص مركزي يحافظ على التناسب.
-    // لا نكتب ملفات صور ضخمة إلى USB؛ JPEG بجودة متوازنة لتقليل الحجم والتحميل على PS2.
-    async function toCoverJpeg(blob, bitmap) {
+    // نحفظ الأغلفة بصيغة PNG للحفاظ على جودة الصورة دون ضغط فقدي.
+    async function toCoverPng(blob, bitmap) {
         const canvas = document.createElement('canvas');
         canvas.width = COVER_WIDTH;
         canvas.height = COVER_HEIGHT;
@@ -793,7 +793,7 @@
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
-        return canvasToBlob(canvas, 'image/jpeg', 0.82);
+        return canvasToBlob(canvas, 'image/png');
     }
 
     // أيقونة القرص: OPL القياسي 64×64 بصيغة PNG.
@@ -1020,7 +1020,7 @@
 
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            const coverName = [`${id}_COV.JPG`, `${id}_COV.PNG`, `${id}.JPG`, `${id}.PNG`].find(n => artHandles.has(n));
+            const coverName = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`].find(n => artHandles.has(n));
             game.coverHandle = coverName ? artHandles.get(coverName) : null;
             game.hasCover = !!coverName;
             game.hasIcon = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`].some(n => iconFiles.has(n));
@@ -1253,7 +1253,7 @@
                 throw new Error('اختر مجلد الصور الأوفلاين أولاً.');
             }
             const v = idVariants(gameId);
-            const names = [v.dot, v.serial, v.dashDot].flatMap(n => [`${n}.JPG`, `${n}.PNG`, `${n}_COV.JPG`, `${n}_COV.PNG`]);
+            const names = [v.dot, v.serial, v.dashDot].flatMap(n => [`${n}.PNG`, `${n}.JPG`, `${n}_COV.PNG`, `${n}_COV.JPG`]);
             for (const name of names) {
                 const handle = offlineFiles.get(name);
                 if (!handle) continue;
@@ -1283,10 +1283,10 @@
         const bitmap = await decodeImage(sourceBlob);
         try {
             if (cover) {
-                const jpeg = await toCoverJpeg(sourceBlob, bitmap);
-                await writeFile(artDirHandle, `${game.gameId}_COV.jpg`, jpeg);
+                const png = await toCoverPng(sourceBlob, bitmap);
+                await writeFile(artDirHandle, `${game.gameId}_COV.png`, png);
                 game.hasCover = true;
-                game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.jpg`);
+                game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.png`);
             }
             if (icon) {
                 const png = await toIconPng(bitmap);

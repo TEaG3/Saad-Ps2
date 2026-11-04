@@ -1,6 +1,6 @@
 {
   "name": "saad-ps2-artwork-station",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Saad PS2 Artwork Station Android wrapper",
   "scripts": {

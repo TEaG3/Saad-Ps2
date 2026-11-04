@@ -933,6 +933,7 @@
                 : await window.showDirectoryPicker({ mode: 'read' });
             offlineFiles = await listDir(offlineFolderHandle);
             btnLocalOffline.textContent = `✅ مجلد الأوفلاين: ${offlineFolderHandle.name} (${offlineFiles.size} ملف)`;
+            if (detectedGames.length) render();
         } catch (e) {
             if (e && e.message) alert(e.message);
         }
@@ -1188,7 +1189,7 @@
         const online = sourceMode.value === 'online';
         const imgAttrsFor = (game, idx) => game.hasCover
             ? `data-local="${idx}"`
-            : (online ? `src="${onlineCoverUrls(game.gameId)[0]}" data-fallback="1"` : '');
+            : (online ? `src="${onlineCoverUrls(game.gameId)[0]}" data-fallback="1"` : `data-offline-game="${escapeHtml(game.gameId)}"`);
         const actions = `
             <div class="row-actions">
                 <button class="btn-secondary btn-small" data-action="download" ${isBusy ? 'disabled' : ''}>⬇️ تحميل</button>
@@ -1244,16 +1245,23 @@
                 if (!entry.isIntersecting) continue;
                 const img = entry.target;
                 previewObserver.unobserve(img);
-                const game = detectedGames[Number(img.dataset.local)];
-                if (!game || !game.coverHandle) continue;
                 try {
-                    const file = await game.coverHandle.getFile();
+                    let handle = null;
+                    if (img.dataset.local !== undefined) {
+                        const game = detectedGames[Number(img.dataset.local)];
+                        handle = game && game.coverHandle;
+                    } else if (img.dataset.offlineGame) {
+                        const variants = idVariants(img.dataset.offlineGame);
+                        const names = [variants.dot, variants.serial, variants.dashDot]
+                            .flatMap(n => [`${n}.JPG`, `${n}.PNG`, `${n}_COV.JPG`, `${n}_COV.PNG`]);
+                        handle = names.map(n => offlineFiles.get(n)).find(Boolean) || null;
+                    }
+                    if (!handle) { img.style.opacity = '0.2'; continue; }
+                    const file = await handle.getFile();
                     const url = URL.createObjectURL(file);
                     localUrls.add(url);
                     img.src = url;
-                } catch (e) {
-                    img.style.opacity = '0.2';
-                }
+                } catch (e) { img.style.opacity = '0.2'; }
             }
         }, { rootMargin: '200px' });
 

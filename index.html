@@ -1055,6 +1055,25 @@
         return list;
     }
 
+    async function isUsableImageHandle(handle) {
+        if (!handle) return false;
+        try {
+            const file = await handle.getFile();
+            if (!file || file.size < 128) return false;
+            if (handle.name.toLowerCase().endsWith('.png')) {
+                const signature = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+                const expected = [137, 80, 78, 71, 13, 10, 26, 10];
+                if (signature.some((byte, i) => byte !== expected[i])) return false;
+            }
+            const bitmap = await decodeImage(file);
+            const valid = bitmap.width > 0 && bitmap.height > 0;
+            bitmap.close && bitmap.close();
+            return valid;
+        } catch (error) {
+            return false;
+        }
+    }
+
     async function checkExistingArtwork(games) {
         artHandles = new Map();
         let iconFiles = new Map();
@@ -1064,10 +1083,25 @@
 
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            const coverName = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`].find(n => artHandles.has(n));
-            game.coverHandle = coverName ? artHandles.get(coverName) : null;
-            game.hasCover = !!coverName;
-            game.hasIcon = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`].some(n => iconFiles.has(n));
+            const coverNames = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`];
+            game.coverHandle = null;
+            for (const name of coverNames) {
+                const handle = artHandles.get(name);
+                if (await isUsableImageHandle(handle)) {
+                    game.coverHandle = handle;
+                    break;
+                }
+            }
+            game.hasCover = !!game.coverHandle;
+
+            const iconNames = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`];
+            game.hasIcon = false;
+            for (const name of iconNames) {
+                if (await isUsableImageHandle(iconFiles.get(name))) {
+                    game.hasIcon = true;
+                    break;
+                }
+            }
         }
     }
 

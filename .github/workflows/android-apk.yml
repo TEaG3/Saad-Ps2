@@ -11,6 +11,8 @@ on:
       - 'package.json'
       - 'saf-storage-bridge.bundle.js'
       - 'game-database.js'
+      - 'game-id-parser.js'
+      - 'tests/**'
       - 'database/**'
       - 'android-native/**'
       - '.github/workflows/android-apk.yml'
@@ -30,10 +32,12 @@ jobs:
           java-version: '17'
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
+      - name: Run game ID parser tests
+        run: npm test
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
+          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js game-id-parser.js www/
           mkdir -p www/database
           cp database/manifest.json database/catalog.json www/database/
       - name: Bundle native plugin proxy

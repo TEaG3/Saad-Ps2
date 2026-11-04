@@ -7,7 +7,8 @@
     "serve": "npx --yes http-server . -p 8080 -c-1",
     "check": "node --check app.js && node --check game-database.js && node --check sw.js",
     "android:sync": "cap sync android",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "test:db": "node tests/database-smoke.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",

@@ -94,13 +94,20 @@ jobs:
           echo "Building Saad PS2 $VERSION (code $VERSION_CODE)"
       - name: Sync web assets
         run: npx cap sync android
-      - name: Build debug APK
+      - name: Build installable Android APKs
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: |
+          # Release variant is optimized but signed with Android's temporary debug key
+          # so it can be installed directly for device testing. A private upload key
+          # is required later for Play Store publication and trusted app updates.
+          printf '\\nandroid { buildTypes { release { signingConfig signingConfigs.debug } } }\\n' >> app/build.gradle
+          ./gradlew assembleDebug assembleRelease
       - uses: actions/upload-artifact@v6
         with:
-          name: saad-ps2-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: saad-ps2-android-apks
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish APK on project download page
@@ -110,10 +117,12 @@ jobs:
           name: Saad PS2 - Latest Android APK
           body: |
             أحدث نسخة Android من Saad PS2.
-            يتم تحديث هذا الإصدار تلقائياً عند نجاح بناء APK جديد.
+            يتضمن APK تجريبياً ونسخة Release محسّنة وموقعة بمفتاح Android debug لتثبيتها مباشرة.
+            هذا ليس مفتاح نشر Play Store؛ يلزم مفتاح توقيع خاص للمداومة على التحديثات والنشر الرسمي.
           prerelease: true
           make_latest: false
           files: |
             android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true
           overwrite_files: true

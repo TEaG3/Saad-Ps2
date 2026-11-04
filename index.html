@@ -715,7 +715,12 @@
     }
 
     function normalizeId(raw) {
-        return raw.toUpperCase().replace('-', '_');
+        const value = String(raw || '').trim().toUpperCase().replace(/-/g, '_');
+        return /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value) ? value : null;
+    }
+
+    function isValidGameId(value) {
+        return typeof value === 'string' && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value);
     }
 
     // يحوّل SLUS_200.62 إلى أشكال الأسماء الشائعة في مصادر الأغلفة
@@ -959,7 +964,7 @@
 
     async function extractGameIdFromIso(file) {
         const fromCnf = await readSystemCnfId(file);
-        if (fromCnf) return fromCnf;
+        if (isValidGameId(fromCnf)) return fromCnf;
 
         const maxScanBytes = Math.min(file.size, 4 * 1024 * 1024);
         const buffer = await file.slice(0, maxScanBytes).arrayBuffer();
@@ -979,15 +984,35 @@
         const file = await fileHandle.getFile();
         const bytes = new Uint8Array(await file.arrayBuffer());
         const games = [];
+        const entrySize = 64;
+        const nameDecoder = new TextDecoder('utf-8', { fatal: false });
+        const idDecoder = new TextDecoder('ascii', { fatal: false });
+        let malformed = 0;
 
-        for (let offset = 0; offset + 64 <= bytes.length; offset += 64) {
-            const name = new TextDecoder('utf-8').decode(bytes.slice(offset, offset + 32)).replace(/\0+$/, '').trim();
-            const rawId = new TextDecoder('ascii').decode(bytes.slice(offset + 32, offset + 47)).replace(/\0+$/, '').trim();
-            const cleanId = rawId.replace(/^ul\./i, '').toUpperCase();
+        // ul.cfg القياسي عبارة عن سجلات ثابتة بطول 64 بايتاً.
+        // لا نحاول تخمين سجل ناقص أو تحويل البايتات التالفة إلى كود لعبة.
+        for (let offset = 0; offset + entrySize <= bytes.length; offset += entrySize) {
+            const record = bytes.subarray(offset, offset + entrySize);
+            const nameBytes = record.subarray(0, 32);
+            const idBytes = record.subarray(32, 47);
+            const title = nameDecoder.decode(nameBytes).replace(/\0+$/, '').trim();
+            const rawId = idDecoder.decode(idBytes).replace(/\0+$/, '').trim();
+            const cleanId = rawId.replace(/^ul\./i, '').toUpperCase().replace(/-/g, '_');
 
-            if (name && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(cleanId)) {
-                games.push({ title: name, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
+            if (!title && !rawId && record.every(byte => byte === 0)) continue;
+            if (!title || !isValidGameId(cleanId)) {
+                malformed++;
+                continue;
             }
+            games.push({ title, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
+        }
+
+        if (bytes.length % entrySize !== 0) {
+            malformed++;
+            console.warn('ul.cfg يحتوي على جزء أخير غير مكتمل:', bytes.length % entrySize, 'بايت');
+        }
+        if (malformed) {
+            console.warn('تم تجاهل سجلات ul.cfg غير الصالحة:', malformed);
         }
         return games;
     }
@@ -1265,15 +1290,22 @@
                 throw new Error('اختر مجلد الصور الأوفلاين أولاً.');
             }
             const v = idVariants(gameId);
-            const names = [v.dot, v.serial, v.dashDot].flatMap(n => [`${n}.JPG`, `${n}.PNG`, `${n}_COV.JPG`, `${n}_COV.PNG`]);
+            const names = [...new Set([v.dot, v.serial, v.dashDot].flatMap(n => [
+                `${n}.JPG`, `${n}.JPEG`, `${n}.PNG`,
+                `${n}_COV.JPG`, `${n}_COV.JPEG`, `${n}_COV.PNG`,
+                `${n}_ICO.PNG`
+            ]))];
             for (const name of names) {
-                const handle = offlineFiles.get(name);
+                const handle = offlineFiles.get(name.toUpperCase());
                 if (!handle) continue;
                 try {
                     const blob = await handle.getFile();
-                    await decodeImage(blob).then(b => b.close && b.close());
+                    const bitmap = await decodeImage(blob);
+                    bitmap.close && bitmap.close();
                     return blob;
-                } catch (e) {}
+                } catch (e) {
+                    console.warn('صورة أوفلاين غير صالحة:', name, e);
+                }
             }
             return null;
         }
@@ -1323,15 +1355,24 @@
         const needCover = overwrite || !game.hasCover;
         const needIcon = overwrite || !game.hasIcon;
 
-        let source = null;
+        let coverSource = null;
         if (needCover) {
-            source = await fetchGameCoverBlob(game.gameId);
-        } else if (needIcon && game.coverHandle) {
-            source = await game.coverHandle.getFile(); // الغلاف موجود: نشتق منه الأيقونة بدون تحميل
+            coverSource = await fetchGameCoverBlob(game.gameId);
+            if (!coverSource) throw new Error('لم يتم العثور على غلاف صالح في المصدر المحدد.');
         }
-        if (!source) throw new Error('لم يتم العثور على صورة لهذه اللعبة في المصدر المحدد.');
 
-        await saveArtwork(game, source, { cover: needCover, icon: needIcon });
+        // عند الحاجة إلى أيقونة فقط، اشتقها من الغلاف المحلي الموجود بدلاً من تنزيله مجدداً.
+        let iconSource = coverSource;
+        if (needIcon && !needCover && game.coverHandle) {
+            iconSource = await game.coverHandle.getFile();
+        }
+        if (needIcon && !iconSource) {
+            iconSource = await fetchGameCoverBlob(game.gameId);
+            if (!iconSource) throw new Error('لم يتم العثور على صورة صالحة لإنشاء الأيقونة.');
+        }
+
+        if (needCover) await saveArtwork(game, coverSource, { cover: true, icon: false });
+        if (needIcon) await saveArtwork(game, iconSource, { cover: false, icon: true });
         return 'ok';
     }
 
@@ -1418,7 +1459,11 @@
 
     btnDownloadMissing.addEventListener('click', () => runBatch(detectedGames.filter(isMissing), false));
     btnDownloadAll.addEventListener('click', () => {
-        if (confirm('سيتم استبدال كل الأغلفة والأيقونات الموجودة. هل تريد المتابعة؟')) runBatch(detectedGames.slice(), true);
+        const existing = detectedGames.filter(g => g.hasCover || g.hasIcon).length;
+        const message = existing
+            ? `سيتم تحديث الصور للـ ${detectedGames.length} لعبة، وقد تُستبدل ملفات موجودة تخص ${existing} لعبة داخل ART/ICONS. لا تتابع إلا إذا كنت تريد استبدالها. هل تريد المتابعة؟`
+            : 'سيتم تحميل صور الألعاب إلى ART وICONS. هل تريد المتابعة؟';
+        if (confirm(message)) runBatch(detectedGames.slice(), true);
     });
     $('btnCancel').addEventListener('click', () => { cancelRequested = true; $('btnCancel').disabled = true; });
 

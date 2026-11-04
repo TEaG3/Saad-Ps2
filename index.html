@@ -407,7 +407,7 @@
     </div>
 
     <h2 class="section-title" id="browse">اختر مخزن الألعاب</h2>
-    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART وART دون فتح كل لعبة على حدة.</p>
+    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART دون فتح كل لعبة على حدة.</p>
 
     <div class="control-panel">
         <div class="browse-grid">
@@ -431,7 +431,7 @@
 ├── <b>DVD/</b>     ← ألعاب DVD (.iso)
 ├── <b>CD/</b>      ← ألعاب CD (.iso)
 ├── <b>ul.cfg</b>   ← الألعاب المقسمة (UL)
-├── <b>ART/</b>     ← الأغلفة (تُنشأ تلقائياً)
+├── <b>ART/</b>     ← الأغلفة _COV وGameID.jpg والأيقونات _ICO
 └── <b>ART/</b>   ← الأيقونات _ICO (تُحفظ هنا أيضاً)</div>
         </div>
     </div>
@@ -528,7 +528,7 @@
     <h2 class="section-title" id="how">ثلاث خطوات فقط</h2>
     <div class="steps">
         <div class="step-card"><div class="num">01</div><h3>اختر الفلاش</h3><p>اضغط «اختر الفلاش ميموري» وحدد جذر الفلاش الذي يحتوي DVD وCD وملف ul.cfg.</p></div>
-        <div class="step-card"><div class="num">02</div><h3>تعرّف على الألعاب</h3><p>يقرأ الموقع بيانات ISO وملف UL ويستخرج كود كل لعبة تلقائياً.</p></div>
+        <div class="step-card"><div class="num">02</div><h3>تعرّف على الألعاب</h3><p>يفحص ISO وSYSTEM.CNF أولاً، ثم يستخرج Game ID من اسم الملف عند الحاجة، ويدعم ul.cfg.</p></div>
         <div class="step-card"><div class="num">03</div><h3>احفظ الأغلفة</h3><p>تُحفظ الأغلفة في ART والأيقونات في ART بالصيغة التي يتعرف عليها اللانشر.</p></div>
     </div>
 
@@ -1042,8 +1042,10 @@
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.iso')) {
                     const file = await entry.getFile();
-                    const gameId = await extractGameIdFromIso(file);
-                    const cleanTitle = entry.name.replace(/\.iso$/i, '').replace(/^[A-Z]{4}[_-]\d{3}\.\d{2}\./i, '');
+                    // أولوية الاستخراج من SYSTEM.CNF وبيانات ISO، ثم اسم الملف كحل احتياطي.
+                    const idFromFileName = entry.name.match(/([A-Z]{4}[_-]\d{3}\.\d{2})/i);
+                    const gameId = await extractGameIdFromIso(file) || (idFromFileName ? normalizeId(idFromFileName[1]) : null);
+                    const cleanTitle = entry.name.replace(/\.iso$/i, '').replace(/^[A-Z]{4}[_-]\d{3}\.\d{2}[._ -]*/i, '') || entry.name.replace(/\.iso$/i, '');
                     if (gameId) {
                         list.push({ title: cleanTitle, gameId, format: 'ISO', hasCover: false, hasIcon: false });
                     }

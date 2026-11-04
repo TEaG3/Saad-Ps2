@@ -532,7 +532,7 @@
 <script>
     // ---------- الإعدادات ----------
     const CONCURRENCY = 1;          // معالجة صورة واحدة لتقليل استهلاك الذاكرة والضغط على USB
-    const FETCH_TIMEOUT_MS = 12000; // مهلة كل طلب
+    const FETCH_TIMEOUT_MS = 25000; // مهلة كل طلب؛ بعض مستودعات الأغلفة تستجيب ببطء
     const COVER_WIDTH = 140;        // المقاس القياسي لأغلفة OPL
     const COVER_HEIGHT = 200;
     const ICON_SIZE = 64;            // المقاس القياسي لأيقونة القرص في OPL
@@ -992,18 +992,24 @@
         return games;
     }
 
-    async function scanIsoFolder(parentHandle, folderName) {
+    async function scanIsoFolder(parentHandle, folderName = '') {
         const list = [];
         try {
-            const dirHandle = await parentHandle.getDirectoryHandle(folderName);
+            const dirHandle = folderName ? await parentHandle.getDirectoryHandle(folderName) : parentHandle;
             for await (const entry of dirHandle.values()) {
-                if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.iso')) {
+                if (entry.kind !== 'file' || !/\.iso$/i.test(entry.name)) continue;
+                try {
                     const file = await entry.getFile();
+                    // استخراج Game ID من SYSTEM.CNF داخل ISO، ثم من اسم الملف كخطة بديلة.
                     const gameId = await extractGameIdFromIso(file);
-                    const cleanTitle = entry.name.replace(/\.iso$/i, '').replace(/^[A-Z]{4}[_-]\d{3}\.\d{2}\./i, '');
-                    if (gameId) {
-                        list.push({ title: cleanTitle, gameId, format: 'ISO', hasCover: false, hasIcon: false });
+                    if (!gameId) {
+                        console.warn('تعذر استخراج Game ID من ملف ISO:', entry.name);
+                        continue;
                     }
+                    const cleanTitle = entry.name.replace(/\.iso$/i, '').replace(/^[A-Z]{4}[_-]\d{3}\.\d{2}[._ -]*/i, '') || gameId;
+                    list.push({ title: cleanTitle, gameId, format: 'ISO', isoFileName: entry.name, isoFolder: folderName || '', hasCover: false, hasIcon: false });
+                } catch (fileError) {
+                    console.warn('تعذر قراءة ملف ISO:', entry.name, fileError);
                 }
             }
         } catch (e) {
@@ -1035,8 +1041,13 @@
         revokeLocalUrls();
         setEmpty('⏳ جاري فحص الألعاب واستخراج الأكواد من الفلاش...');
 
-        const [dvdGames, cdGames] = [await scanIsoFolder(usbRootHandle, 'DVD'), await scanIsoFolder(usbRootHandle, 'CD')];
-        const all = [...dvdGames, ...cdGames];
+        // دعم ملفات ISO في DVD وCD وكذلك مباشرة في جذر المجلد المختار.
+        const [dvdGames, cdGames, rootIsoGames] = await Promise.all([
+            scanIsoFolder(usbRootHandle, 'DVD'),
+            scanIsoFolder(usbRootHandle, 'CD'),
+            scanIsoFolder(usbRootHandle)
+        ]);
+        const all = [...dvdGames, ...cdGames, ...rootIsoGames];
 
         try {
             const ulHandle = await usbRootHandle.getFileHandle('ul.cfg');

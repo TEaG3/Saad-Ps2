@@ -6,10 +6,10 @@ The repository contains a Capacitor Android wrapper and a native Android Storage
 1. Open GitHub → Actions → **Build Saad PS2 Android APK**.
 2. Select **Run workflow** (or wait for the workflow triggered by a push).
 3. Wait for the build job to finish successfully.
-4. Download the `saad-ps2-debug-apk` artifact and extract `app-debug.apk`.
+4. Download the `saad-ps2-android-apks` artifact (contains `app-debug.apk` and `app-release.apk`), or use the [latest GitHub Release](https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest).
 5. Install it on an Android device.
 
-This is a debug build, not a Play Store release. It is not signed with a private release keystore.
+The release APK is optimized and signed with the temporary Android debug key for sideload testing. It is not a Play Store release and is not signed with a persistent private keystore; updates over builds signed with another key may require uninstalling the previous app first.
 
 ## Android storage support
 The native `SafStorage` plugin uses Android's Storage Access Framework:
@@ -20,7 +20,9 @@ The native `SafStorage` plugin uses Android's Storage Access Framework:
 - `writeFile({uri, name, data})` saves artwork.
 - `createDirectory({uri, name})` creates `ART` and `ICONS`.
 
-The JavaScript adapter in `index.html` presents SAF directories and files through the same handle methods used by the browser version. The existing game scanner, ISO SYSTEM.CNF reader, ul.cfg parser, online cover lookup, preview, and ART/ICONS saving workflow are therefore shared.
+The JavaScript adapter in `app.js` presents SAF directories and files through the same handle methods used by the browser version. The existing game scanner, ISO SYSTEM.CNF reader, ul.cfg parser, online cover lookup, preview, and ART/ICONS saving workflow are therefore shared.
+
+The web assets copied into `www/` before `cap sync` are: `index.html`, `styles.css`, `app.js`, `manifest.webmanifest`, `sw.js`, `icon.svg`, `game-database.js`, `saf-storage-bridge.bundle.js`, and the `database/` catalog files.
 
 ## Notes and limitations
 - Downloading covers requires an internet connection. Previously saved artwork can be used offline.

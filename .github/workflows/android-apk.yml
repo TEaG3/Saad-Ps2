@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'styles.css'
+      - 'app.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'capacitor.config.ts'
       - 'package.json'
+      - 'package-lock.json'
+      - 'icon.svg'
       - 'saf-storage-bridge.bundle.js'
       - 'game-database.js'
       - 'database/**'
@@ -29,11 +33,15 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Capacitor
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: Validate web source
+        run: |
+          npm run check
+          test -s index.html && test -s styles.css && test -s app.js
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
+          cp index.html styles.css app.js manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
           mkdir -p www/database
           cp database/manifest.json database/catalog.json www/database/
       - name: Bundle native plugin proxy

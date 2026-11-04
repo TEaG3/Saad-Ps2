@@ -9,6 +9,9 @@ on:
       - ux/audit-and-mobile-refresh
     paths:
       - 'index.html'
+      - 'styles.css'
+      - 'app.js'
+      - 'package-lock.json'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'capacitor.config.ts'
@@ -41,12 +44,20 @@ jobs:
           java-version: '17'
 
       - name: Install project dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Install isolated IndexedDB test dependency
+        run: npm install --no-save --package-lock=false fake-indexeddb@6
+
+      - name: Validate web source and database behavior
+        run: |
+          npm run check
+          npm run test:db
 
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
+          cp index.html styles.css app.js manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
           mkdir -p www/database
           cp database/manifest.json database/catalog.json www/database/
 

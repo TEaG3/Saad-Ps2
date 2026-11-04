@@ -813,7 +813,15 @@
         return canvasToBlob(canvas, 'image/png');
     }
 
-    async function writeFile(directoryHandle, fileName, data) {
+    async function writeFile(directoryHandle, fileName, data, overwrite = false) {
+        if (!overwrite) {
+            try {
+                await directoryHandle.getFileHandle(fileName);
+                throw new Error(`الملف موجود مسبقاً ولن يتم استبداله: ${fileName}`);
+            } catch (error) {
+                if (error && error.message && error.message.startsWith('الملف موجود مسبقاً')) throw error;
+            }
+        }
         const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         try {

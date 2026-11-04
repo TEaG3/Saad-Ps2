@@ -432,15 +432,6 @@
 </head>
 <body>
 
-<div class="startup-screen" id="startupScreen" role="dialog" aria-label="SAAD PS2 startup" aria-modal="true">
-  <video class="startup-video" id="startupVideo" autoplay muted playsinline preload="auto" poster="./icon.svg" aria-label="SAAD PS2 intro">
-    <source src="./assets/gemini_generated_video_B368FFB9.mp4" type="video/mp4">
-  </video>
-  <div class="startup-fallback" id="startupFallback" hidden>SAAD <span>PS2</span><small>ARTWORK STATION</small></div>
-  <button class="startup-skip" id="skipStartup" type="button">تخطي المقدمة</button>
-</div>
-
-
 <div class="container">
     <nav class="topnav">
         <div class="brand">
@@ -1643,44 +1634,7 @@
     }
 
 
-    // Play the supplied SAAD PS2 intro once per page load; never block the app.
-    (() => {
-      const screen = document.getElementById('startupScreen');
-      const skip = document.getElementById('skipStartup');
-      const video = document.getElementById('startupVideo');
-      if (!screen || !skip || !video) return;
-      let closed = false;
-      let fallbackTimer;
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        window.clearTimeout(fallbackTimer);
-        video.pause();
-        screen.classList.add('is-leaving');
-        window.setTimeout(() => screen.remove(), 950);
-      };
-      const showFallback = () => {
-        screen.classList.add('video-failed');
-        const fallback = document.getElementById('startupFallback');
-        if (fallback) fallback.hidden = false;
-      };
-      skip.addEventListener('click', close, { once: true });
-      video.addEventListener('ended', close, { once: true });
-      video.addEventListener('error', showFallback, { once: true });
-      document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && !closed) close();
-      });
-      fallbackTimer = window.setTimeout(close, 11500);
-      const playAttempt = video.play();
-      if (playAttempt && typeof playAttempt.catch === 'function') {
-        playAttempt.catch(() => showFallback());
-      }
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        video.pause();
-        showFallback();
-        fallbackTimer = window.setTimeout(close, 1200);
-      }
-    })();
+
 
 </script>
 

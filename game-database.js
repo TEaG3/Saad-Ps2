@@ -179,7 +179,8 @@
         releaseYear: record.releaseYear || '',
         region: record.region || '',
         genre: record.genre || '',
-        description: record.description || ''
+        description: record.description || '',
+        coverUrl: record.coverUrl || ''
       };
     });
   }

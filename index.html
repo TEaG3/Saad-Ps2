@@ -407,7 +407,7 @@
     </div>
 
     <h2 class="section-title" id="browse">اختر مخزن الألعاب</h2>
-    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART وICONS دون فتح كل لعبة على حدة.</p>
+    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً، ثم ينزّل الأغلفة والأيقونات الناقصة بضغطة واحدة ويحفظها داخل ART وICONS دون فتح كل لعبة على حدة.</p>
 
     <div class="control-panel">
         <div class="browse-grid">
@@ -423,7 +423,7 @@
                     <button id="btnSelectUsb" class="btn-primary">📁 اختر الفلاش وابدأ المزامنة التلقائية</button>
                     <button id="btnRescan" class="btn-secondary" disabled>🔄 إعادة الفحص</button>
                     <button id="btnLocalOffline" class="btn-secondary" style="display:none;">🖼️ اختر مجلد الصور الأوفلاين</button>
-                    <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ مزامنة الأغلفة الناقصة</button>
+                    <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ تحميل أغلفة جميع الألعاب الناقصة بضغطة واحدة</button>
                     <button id="btnDownloadAll" class="btn-warning" disabled>🔄 تحميل وتحديث الكل</button>
                 </div>
             </div>
@@ -437,7 +437,7 @@
     </div>
 
     <div class="stats-grid">
-        <div class="stat-card"><h3 id="statTotal">0</h3><span>إجمالي الألعاب</span></div>
+        <div class="stat-card"><h3 id="statTotal">0</h3><span>الألعاب المكتشفة على الفلاش</span></div>
         <div class="stat-card"><h3 id="statIso">0</h3><span>ألعاب بصيغة ISO</span></div>
         <div class="stat-card"><h3 id="statUl">0</h3><span>ألعاب مقسمة (ul.cfg)</span></div>
         <div class="stat-card"><h3 id="statReady">0</h3><span>أغلفة جاهزة بالفلاش</span></div>
@@ -446,10 +446,10 @@
 
     <section class="control-panel" id="databasePanel" style="text-align:right;margin-bottom:24px;">
         <h2 style="font-size:20px;margin-bottom:8px;">🗃️ قاعدة بيانات Saad PS2</h2>
-        <p class="section-sub" style="margin-bottom:12px;">يحفظ التطبيق الألعاب التي يتعرف عليها محلياً، ويزامن كتالوج المعلومات المركزي عند توفر تحديث. بيانات مكتبتك تبقى على جهازك.</p>
+        <p class="section-sub" style="margin-bottom:12px;">قاعدة بيانات محلية تحفظ الألعاب المكتشفة، وكتالوج أونلاين يوفّر أكواد الألعاب والأغلفة المتاحة. اسم اللعبة الذي يُقرأ من الفلاش له الأولوية على سجل الكتالوج. بيانات مكتبتك تبقى على جهازك.</p>
         <div class="stats-grid" style="margin-bottom:12px;">
-            <div class="stat-card"><h3 id="dbLocalCount">0</h3><span>ألعاب محفوظة محلياً</span></div>
-            <div class="stat-card"><h3 id="dbCatalogCount">0</h3><span>سجلات الكتالوج المركزي</span></div>
+            <div class="stat-card"><h3 id="dbLocalCount">0</h3><span>ألعاب مكتشفة ومحفوظة محلياً</span></div>
+            <div class="stat-card"><h3 id="dbCatalogCount">0</h3><span>ألعاب لها سجل/غلاف في الكتالوج الأونلاين</span></div>
             <div class="stat-card"><h3 id="dbSyncState" style="font-size:16px;">لم تتم المزامنة</h3><span>حالة تحديث البيانات</span></div>
         </div>
         <p id="dbLastSync" style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">لم تتم مزامنة الكتالوج بعد.</p>
@@ -530,8 +530,8 @@
     </div>
 
     <footer>
-        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة JPG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.jpg</code>،
-        وأيقونات القرص بمقاس 64×64 بصيغة PNG داخل مجلد ICONS. يعمل على Chrome وEdge، وللاستخدام مع PS2 يُفضّل تهيئة الفلاش بنظام FAT32؛ توافق exFAT يعتمد على إصدار OPL ولا يُضمن.<br>
+        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة PNG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.png</code>،
+        وأيقونات القرص بمقاس 64×64 بصيغة PNG داخل مجلد ICONS. يعمل على Chrome وEdge، ويدعم الكتابة إلى exFAT إذا كان النظام والمتصفح/Android يتيحان الوصول إلى الفلاش. يتطلب تشغيل exFAT على PS2 إصدار OPL 1.2.0 beta rev1880 أو أحدث.<br>
         كل المعالجة تتم داخل متصفحك، ولا يُرفع أي ملف من الفلاش إلى أي سيرفر.
     </footer>
 </div>
@@ -547,6 +547,7 @@
 </div>
 
 <script src="./game-database.js"></script>
+<script src="./game-id-parser.js"></script>
 <script src="./saf-storage-bridge.bundle.js"></script>
 <script>
     // ---------- الإعدادات ----------
@@ -777,8 +778,8 @@
     }
 
     // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 مع قص مركزي يحافظ على التناسب.
-    // لا نكتب ملفات صور ضخمة إلى USB؛ JPEG بجودة متوازنة لتقليل الحجم والتحميل على PS2.
-    async function toCoverJpeg(blob, bitmap) {
+    // نحفظ غلاف OPL بصيغة PNG وبالمقاس القياسي 140×200.
+    async function toCoverPng(blob, bitmap) {
         const canvas = document.createElement('canvas');
         canvas.width = COVER_WIDTH;
         canvas.height = COVER_HEIGHT;
@@ -793,7 +794,7 @@
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
-        return canvasToBlob(canvas, 'image/jpeg', 0.82);
+        return canvasToBlob(canvas, 'image/png');
     }
 
     // أيقونة القرص: OPL القياسي 64×64 بصيغة PNG.
@@ -812,7 +813,15 @@
         return canvasToBlob(canvas, 'image/png');
     }
 
-    async function writeFile(directoryHandle, fileName, data) {
+    async function writeFile(directoryHandle, fileName, data, overwrite = false) {
+        if (!overwrite) {
+            try {
+                await directoryHandle.getFileHandle(fileName);
+                throw new Error(`الملف موجود مسبقاً ولن يتم استبداله: ${fileName}`);
+            } catch (error) {
+                if (error && error.message && error.message.startsWith('الملف موجود مسبقاً')) throw error;
+            }
+        }
         const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         try {
@@ -927,51 +936,9 @@
         await scanAndSyncArtwork();
     });
 
-    // قراءة SYSTEM.CNF من نظام ملفات ISO9660 (القطاع 2048 بايت) لاستخراج كود اللعبة بدقة
-    async function readSystemCnfId(file) {
-        try {
-            const SECTOR = 2048;
-            const pvd = new DataView(await file.slice(16 * SECTOR, 17 * SECTOR).arrayBuffer());
-            if (pvd.byteLength < SECTOR || pvd.getUint8(0) !== 1) return null;
-            const rootLba = pvd.getUint32(156 + 2, true);
-            const rootSize = pvd.getUint32(156 + 10, true);
-            const dirBytes = new Uint8Array(await file.slice(rootLba * SECTOR, rootLba * SECTOR + Math.min(rootSize, 64 * 1024)).arrayBuffer());
-            let off = 0;
-            while (off < dirBytes.length) {
-                const len = dirBytes[off];
-                if (len === 0) { off = (Math.floor(off / SECTOR) + 1) * SECTOR; continue; }
-                const dv = new DataView(dirBytes.buffer, dirBytes.byteOffset + off, len);
-                const nameLen = dv.getUint8(32);
-                const name = new TextDecoder('ascii').decode(dirBytes.slice(off + 33, off + 33 + nameLen));
-                if (/^SYSTEM\.CNF/i.test(name)) {
-                    const lba = dv.getUint32(2, true);
-                    const size = Math.min(dv.getUint32(10, true), 4096);
-                    const text = new TextDecoder('ascii').decode(await file.slice(lba * SECTOR, lba * SECTOR + size).arrayBuffer());
-                    const m = text.match(/BOOT2?\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-                    return m ? normalizeId(m[1]) : null;
-                }
-                off += len;
-            }
-        } catch (e) {}
-        return null;
-    }
-
+    // يعتمد التعرف على SYSTEM.CNF أولاً؛ لا يجري مسحاً عاماً لبيانات ISO بحثاً عن أرقام عشوائية.
     async function extractGameIdFromIso(file) {
-        const fromCnf = await readSystemCnfId(file);
-        if (fromCnf) return fromCnf;
-
-        const maxScanBytes = Math.min(file.size, 4 * 1024 * 1024);
-        const buffer = await file.slice(0, maxScanBytes).arrayBuffer();
-        const text = new TextDecoder('ascii').decode(buffer);
-
-        const bootMatch = text.match(/BOOT2\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-        if (bootMatch) return normalizeId(bootMatch[1]);
-
-        const genericMatch = text.match(/([SPL][LCB][UEPKAJ][SDMXP]_\d{3}\.\d{2})/i);
-        if (genericMatch) return normalizeId(genericMatch[1]);
-
-        const anyName = file.name.match(/([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-        return anyName ? normalizeId(anyName[1]) : null;
+        return window.SaadPs2GameId.extractGameIdFromIso(file);
     }
 
     async function parseUlCfg(fileHandle) {
@@ -1020,7 +987,7 @@
 
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            const coverName = [`${id}_COV.JPG`, `${id}_COV.PNG`, `${id}.JPG`, `${id}.PNG`].find(n => artHandles.has(n));
+            const coverName = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`].find(n => artHandles.has(n));
             game.coverHandle = coverName ? artHandles.get(coverName) : null;
             game.hasCover = !!coverName;
             game.hasIcon = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`].some(n => iconFiles.has(n));
@@ -1248,6 +1215,19 @@
 
     // ---------- جلب الصور ----------
     async function fetchGameCoverBlob(gameId) {
+        const scanned = detectedGames.find(game => game.gameId === gameId);
+        const preferredUrl = scanned && scanned.coverUrl;
+        if (sourceMode.value === 'online' && preferredUrl) {
+            try {
+                const response = await fetchWithTimeout(preferredUrl);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const bitmap = await decodeImage(blob);
+                    bitmap.close && bitmap.close();
+                    return blob;
+                }
+            } catch (error) { console.info('تعذر جلب الغلاف من سجل الكتالوج؛ ستتم تجربة المصادر البديلة.', error); }
+        }
         if (sourceMode.value === 'offline') {
             if (!offlineFolderHandle) {
                 throw new Error('اختر مجلد الصور الأوفلاين أولاً.');
@@ -1279,18 +1259,18 @@
         return null;
     }
 
-    async function saveArtwork(game, sourceBlob, { cover, icon }) {
+    async function saveArtwork(game, sourceBlob, { cover, icon, overwrite = false }) {
         const bitmap = await decodeImage(sourceBlob);
         try {
             if (cover) {
-                const jpeg = await toCoverJpeg(sourceBlob, bitmap);
-                await writeFile(artDirHandle, `${game.gameId}_COV.jpg`, jpeg);
+                const png = await toCoverPng(sourceBlob, bitmap);
+                await writeFile(artDirHandle, `${game.gameId}_COV.png`, png, overwrite);
                 game.hasCover = true;
-                game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.jpg`);
+                game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.png`);
             }
             if (icon) {
                 const png = await toIconPng(bitmap);
-                await writeFile(iconDirHandle, `${game.gameId}_ICO.png`, png);
+                await writeFile(iconDirHandle, `${game.gameId}_ICO.png`, png, overwrite);
                 game.hasIcon = true;
             }
         } finally {
@@ -1319,7 +1299,7 @@
         }
         if (!source) return 'fail';
 
-        await saveArtwork(game, source, { cover: needCover, icon: needIcon });
+        await saveArtwork(game, source, { cover: needCover, icon: needIcon, overwrite });
         return 'ok';
     }
 
@@ -1438,7 +1418,7 @@
         if (!file || !game) return;
         try {
             await ensureDirs();
-            await saveArtwork(game, file, { cover: true, icon: true });
+            await saveArtwork(game, file, { cover: true, icon: true, overwrite: false });
             render();
         } catch (err) {
             alert('تعذر استخدام هذه الصورة. تأكد أنها صورة صالحة وأن الفلاش قابل للكتابة.');
@@ -1462,7 +1442,7 @@
     });
 
     // ---------- التحديثات: بيانات الويب + إشعار إصدار Android ----------
-    const APP_VERSION = '1.0.4';
+    const APP_VERSION = '1.0.5';
     const RELEASE_PAGE = 'https://github.com/TEaG3/Saad-Ps2/releases/tag/android-latest';
     const updateNotice = $('appUpdateNotice');
     const dismissedVersionKey = 'saadps2-dismissed-app-version';

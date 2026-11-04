@@ -1083,20 +1083,34 @@
 
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            const coverNames = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`];
+            // نعطي الأولوية دائماً لملف PNG. ملفات JPG القديمة تُعامل كمصدر للتحويل
+            // ولا تُعتبر مكتملة حتى ننشئ النسخة الجديدة بصيغة PNG.
+            const pngCoverNames = [`${id}_COV.PNG`, `${id}.PNG`];
+            const legacyCoverNames = [`${id}_COV.JPG`, `${id}.JPG`, `${id}_COV.JPEG`, `${id}.JPEG`];
             game.coverHandle = null;
-            for (const name of coverNames) {
+            game.legacyCoverHandle = null;
+            for (const name of pngCoverNames) {
                 const handle = artHandles.get(name);
                 if (await isUsableImageHandle(handle)) {
                     game.coverHandle = handle;
                     break;
                 }
             }
+            if (!game.coverHandle) {
+                for (const name of legacyCoverNames) {
+                    const handle = artHandles.get(name);
+                    if (await isUsableImageHandle(handle)) {
+                        game.legacyCoverHandle = handle;
+                        break;
+                    }
+                }
+            }
             game.hasCover = !!game.coverHandle;
 
-            const iconNames = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`];
+            // لا نعدّ أيقونة JPG مكتملة؛ يجب أن تكون أيقونة OPL الناتجة PNG.
+            const pngIconNames = [`${id}_ICO.PNG`, `${id}.PNG`];
             game.hasIcon = false;
-            for (const name of iconNames) {
+            for (const name of pngIconNames) {
                 if (await isUsableImageHandle(iconFiles.get(name))) {
                     game.hasIcon = true;
                     break;
@@ -1408,9 +1422,13 @@
 
         let source = null;
         if (needCover) {
-            source = await fetchGameCoverBlob(game.gameId);
+            // إذا وجدنا غلاف JPG قديماً، نحوله محلياً إلى PNG بدلاً من تجاوزه
+            // أو طلب نسخة جديدة من الإنترنت.
+            source = game.legacyCoverHandle
+                ? await game.legacyCoverHandle.getFile()
+                : await fetchGameCoverBlob(game.gameId);
         } else if (needIcon && game.coverHandle) {
-            source = await game.coverHandle.getFile(); // الغلاف موجود: نشتق منه الأيقونة بدون تحميل
+            source = await game.coverHandle.getFile(); // الغلاف PNG موجود: نشتق منه الأيقونة
         }
         if (!needCover && !needIcon) return 'skip';
         if (!source) return 'fail';

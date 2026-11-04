@@ -424,7 +424,7 @@
                     <button id="btnRescan" class="btn-secondary" disabled>🔄 إعادة الفحص</button>
                     <button id="btnLocalOffline" class="btn-secondary" style="display:none;">🖼️ اختر مجلد الصور الأوفلاين</button>
                     <button id="btnDownloadMissing" class="btn-success" disabled>⬇️ مزامنة الأغلفة الناقصة</button>
-                    <button id="btnDownloadAll" class="btn-warning" disabled>🔄 تحميل وتحديث الكل</button>
+                    <button id="btnDownloadAll" class="btn-warning" disabled>⬇️ تحميل أغلفة وأيقونات جميع الألعاب</button>
                 </div>
             </div>
             <div class="tree" aria-label="هيكل الفلاش المطلوب"><b>USB/</b>
@@ -1365,6 +1365,7 @@
         } else if (needIcon && game.coverHandle) {
             source = await game.coverHandle.getFile(); // الغلاف موجود: نشتق منه الأيقونة بدون تحميل
         }
+        if (!needCover && !needIcon) return 'skip';
         if (!source) return 'fail';
 
         await saveArtwork(game, source, { cover: needCover, icon: needIcon, overwrite });
@@ -1395,7 +1396,7 @@
             return;
         }
 
-        let completed = 0, successful = 0;
+        let completed = 0, successful = 0, alreadyComplete = 0;
         const failed = [];
         let cursor = 0;
 
@@ -1413,7 +1414,9 @@
                 tick(`جاري معالجة: ${game.title} (${game.gameId})`);
                 try {
                     const result = await processGame(game, overwrite);
-                    if (result === 'ok') successful++; else failed.push(game);
+                    if (result === 'ok') successful++;
+                    else if (result === 'skip') alreadyComplete++;
+                    else failed.push(game);
                 } catch (error) {
                     failed.push(game);
                 }
@@ -1431,13 +1434,13 @@
         $('btnCancel').disabled = true;
         isBusy = false;
         lastFailed = failed;
-        showReport(successful, failed, cancelled ? remaining : 0);
+        showReport(successful, failed, cancelled ? remaining : 0, alreadyComplete);
         render();
     }
 
-    function showReport(successful, failed, skipped) {
+    function showReport(successful, failed, skipped, alreadyComplete = 0) {
         const el = $('report');
-        let html = `<strong>النتيجة:</strong> نجح ${successful}، تعذّر ${failed.length}` + (skipped ? `، لم تُعالج ${skipped}` : '') + '.';
+        let html = `<strong>النتيجة:</strong> تم تجهيز ${successful} لعبة، مكتملة مسبقاً ${alreadyComplete}، تعذّر ${failed.length}` + (skipped ? `، لم تُعالج بسبب الإيقاف ${skipped}` : '') + '.';
         if (failed.length) {
             html += '<ul>' + failed.map(g => `<li>${escapeHtml(g.title)} <span dir="ltr">(${escapeHtml(g.gameId)})</span></li>`).join('') + '</ul>';
             html += '<div class="report-actions"><button class="btn-warning btn-small" id="btnRetry">🔁 إعادة محاولة الفاشل</button></div>';
@@ -1451,7 +1454,8 @@
 
     btnDownloadMissing.addEventListener('click', () => runBatch(detectedGames.filter(isMissing), false));
     btnDownloadAll.addEventListener('click', () => {
-        if (confirm('سيتم استبدال كل الأغلفة والأيقونات الموجودة. هل تريد المتابعة؟')) runBatch(detectedGames.slice(), true);
+        // يعالج المكتبة المكتشفة كلها، ويملأ الناقص فقط دون استبدال أي ملف موجود.
+        runBatch(detectedGames.slice(), false);
     });
     $('btnCancel').addEventListener('click', () => { cancelRequested = true; $('btnCancel').disabled = true; });
 

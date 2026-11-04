@@ -441,6 +441,9 @@
         <div class="stat-card"><h3 id="statIso">0</h3><span>ألعاب بصيغة ISO</span></div>
         <div class="stat-card"><h3 id="statUl">0</h3><span>ألعاب مقسمة (ul.cfg)</span></div>
         <div class="stat-card"><h3 id="statReady">0</h3><span>أغلفة جاهزة بالفلاش</span></div>
+        <div class="stat-card"><h3 id="statIcons">0</h3><span>أيقونات جاهزة بالفلاش</span></div>
+        <div class="stat-card"><h3 id="statNoCover">0</h3><span>ألعاب بلا غلاف</span></div>
+        <div class="stat-card"><h3 id="statNoIcon">0</h3><span>ألعاب بلا أيقونة</span></div>
         <div class="stat-card"><h3 id="statMissing">0</h3><span>ألعاب ينقصها غلاف أو أيقونة</span></div>
     </div>
 
@@ -728,7 +731,12 @@
     }
 
     function normalizeId(raw) {
-        return raw.toUpperCase().replace('-', '_');
+        const value = String(raw || '').trim().toUpperCase().replace('-', '_');
+        return /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value) ? value : null;
+    }
+
+    function isValidGameId(value) {
+        return typeof value === 'string' && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value);
     }
 
     // يحوّل SLUS_200.62 إلى أشكال الأسماء الشائعة في مصادر الأغلفة
@@ -747,6 +755,7 @@
         const v = idVariants(gameId);
         // الأولوية: أغلفة PS2 القياسية من xlenore، ثم GameTDB، ثم صيغ أسماء بديلة للتوافق.
         // لا نستخدم أغلفة 3D هنا حتى لا نستبدل غلاف OPL الأمامي بصورة صندوق ثلاثية الأبعاد.
+        if (!isValidGameId(gameId)) return [];
         const urls = [`${RAW_BASE}/${v.serial}.jpg`];
         const region = GAMETDB_REGION[v.prefix];
         if (region) urls.push(`https://art.gametdb.com/ps2/cover/${region}/${v.serial}.jpg`);
@@ -815,10 +824,30 @@
     async function writeFile(directoryHandle, fileName, data) {
         const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
+        try { await writable.write(data); } finally { await writable.close(); }
+        const saved = await fileHandle.getFile();
+        if (saved.size !== data.size) throw new Error(`فشل التحقق من حجم الملف ${fileName}`);
+        const expected = new Uint8Array(await data.slice(0, Math.min(16, data.size)).arrayBuffer());
+        const actual = new Uint8Array(await saved.slice(0, expected.length).arrayBuffer());
+        if (expected.some((byte, i) => byte !== actual[i])) throw new Error(`فشل التحقق من محتوى الملف ${fileName}`);
+        return fileHandle;
+    }
+
+    async function backupExisting(directoryHandle, fileName) {
         try {
-            await writable.write(data);
-        } finally {
-            await writable.close();
+            const existing = await directoryHandle.getFileHandle(fileName);
+            const file = await existing.getFile();
+            const backupDir = await usbRootHandle.getDirectoryHandle('BACKUP', { create: true });
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const target = await backupDir.getFileHandle(`${stamp}_${fileName}`, { create: true });
+            const writer = await target.createWritable();
+            try { await writer.write(file); } finally { await writer.close(); }
+            const copied = await target.getFile();
+            if (copied.size !== file.size) throw new Error(`تعذر التحقق من النسخة الاحتياطية: ${fileName}`);
+            return true;
+        } catch (error) {
+            if (error && error.name === 'NotFoundError') return false;
+            throw error;
         }
     }
 
@@ -935,6 +964,7 @@
             if (pvd.byteLength < SECTOR || pvd.getUint8(0) !== 1) return null;
             const rootLba = pvd.getUint32(156 + 2, true);
             const rootSize = pvd.getUint32(156 + 10, true);
+            if (!rootLba || !rootSize || rootLba * SECTOR >= file.size) return null;
             const dirBytes = new Uint8Array(await file.slice(rootLba * SECTOR, rootLba * SECTOR + Math.min(rootSize, 64 * 1024)).arrayBuffer());
             let off = 0;
             while (off < dirBytes.length) {
@@ -958,7 +988,7 @@
 
     async function extractGameIdFromIso(file) {
         const fromCnf = await readSystemCnfId(file);
-        if (fromCnf) return fromCnf;
+        if (isValidGameId(fromCnf)) return fromCnf;
 
         const maxScanBytes = Math.min(file.size, 4 * 1024 * 1024);
         const buffer = await file.slice(0, maxScanBytes).arrayBuffer();
@@ -982,9 +1012,9 @@
         for (let offset = 0; offset + 64 <= bytes.length; offset += 64) {
             const name = new TextDecoder('utf-8').decode(bytes.slice(offset, offset + 32)).replace(/\0+$/, '').trim();
             const rawId = new TextDecoder('ascii').decode(bytes.slice(offset + 32, offset + 47)).replace(/\0+$/, '').trim();
-            const cleanId = rawId.replace(/^ul\./i, '').toUpperCase();
+            const cleanId = normalizeId(rawId.replace(/^ul\./i, ''));
 
-            if (name && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(cleanId)) {
+            if (name && isValidGameId(cleanId)) {
                 games.push({ title: name, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
             }
         }
@@ -1132,6 +1162,9 @@
         $('statIso').textContent = detectedGames.filter(g => g.format === 'ISO').length;
         $('statUl').textContent = detectedGames.filter(g => g.format === 'UL').length;
         $('statReady').textContent = detectedGames.filter(g => g.hasCover).length;
+        $('statIcons').textContent = detectedGames.filter(g => g.hasIcon).length;
+        $('statNoCover').textContent = detectedGames.filter(g => !g.hasCover).length;
+        $('statNoIcon').textContent = detectedGames.filter(g => !g.hasIcon).length;
         $('statMissing').textContent = detectedGames.filter(isMissing).length;
 
         updateButtons();
@@ -1271,6 +1304,7 @@
                 const response = await fetchWithTimeout(url);
                 if (!response.ok) continue;
                 const blob = await response.blob();
+                if (!/^image\/(jpeg|png|webp|gif|bmp)$/i.test(blob.type || '')) continue;
                 const bitmap = await decodeImage(blob); // يرفض الملفات التالفة
                 bitmap.close && bitmap.close();
                 return blob;
@@ -1279,18 +1313,22 @@
         return null;
     }
 
-    async function saveArtwork(game, sourceBlob, { cover, icon }) {
+    async function saveArtwork(game, sourceBlob, { cover, icon, overwrite = false }) {
         const bitmap = await decodeImage(sourceBlob);
         try {
             if (cover) {
                 const jpeg = await toCoverJpeg(sourceBlob, bitmap);
-                await writeFile(artDirHandle, `${game.gameId}_COV.jpg`, jpeg);
+                const coverName = `${game.gameId}_COV.jpg`;
+                if (overwrite) await backupExisting(artDirHandle, coverName);
+                await writeFile(artDirHandle, coverName, jpeg);
                 game.hasCover = true;
                 game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.jpg`);
             }
             if (icon) {
                 const png = await toIconPng(bitmap);
-                await writeFile(iconDirHandle, `${game.gameId}_ICO.png`, png);
+                const iconName = `${game.gameId}_ICO.png`;
+                if (overwrite) await backupExisting(iconDirHandle, iconName);
+                await writeFile(iconDirHandle, iconName, png);
                 game.hasIcon = true;
             }
         } finally {
@@ -1319,7 +1357,7 @@
         }
         if (!source) return 'fail';
 
-        await saveArtwork(game, source, { cover: needCover, icon: needIcon });
+        await saveArtwork(game, source, { cover: needCover, icon: needIcon, overwrite });
         return 'ok';
     }
 

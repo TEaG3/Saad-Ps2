@@ -381,6 +381,13 @@
         /* SAAD PS2 original 3D boot sequence + tactile controls */
         .startup-screen{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;overflow:hidden;isolation:isolate;background:radial-gradient(ellipse at 50% 48%,#101d52 0%,#080d25 38%,#01030a 78%);opacity:1;visibility:visible;transition:opacity .9s ease,visibility .9s ease}
         .startup-screen.is-leaving{opacity:0;visibility:hidden;pointer-events:none}
+        .startup-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#020611}
+        .startup-screen:after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(1,5,18,.08),rgba(1,5,18,.16) 55%,rgba(1,5,18,.48))}
+        .startup-fallback{position:absolute;z-index:2;inset:0;display:grid;place-content:center;gap:12px;text-align:center;color:#fff;background:radial-gradient(ellipse at center,#13265a,#020611 72%);font-weight:800;letter-spacing:4px}
+        .startup-fallback span{color:#3b9cff}
+        .startup-screen.video-failed .startup-video{display:none}
+        .startup-screen.video-failed .startup-fallback{display:grid}
+        .startup-skip{z-index:5}
         .startup-space{position:absolute;inset:0;overflow:hidden;perspective:900px;background:radial-gradient(ellipse at 50% 55%,rgba(35,91,255,.16),transparent 48%)}
         .startup-space:before{content:"";position:absolute;inset:-35%;background:repeating-radial-gradient(ellipse at center,transparent 0 11%,rgba(40,92,255,.045) 11.2% 11.35%,transparent 11.6% 19%);transform:rotateX(68deg);animation:space-drift 18s linear infinite}
         .startup-nebula{position:absolute;inset:0;background:radial-gradient(ellipse at 48% 52%,rgba(25,75,255,.24),transparent 34%),radial-gradient(ellipse at 72% 35%,rgba(112,35,255,.17),transparent 30%);filter:blur(22px);animation:nebula-breathe 5s ease-in-out infinite alternate}
@@ -426,33 +433,10 @@
 <body>
 
 <div class="startup-screen" id="startupScreen" role="dialog" aria-label="SAAD PS2 startup" aria-modal="true">
-  <div class="startup-space" aria-hidden="true">
-    <div class="startup-nebula"></div>
-    <div class="startup-cubes">
-      <i class="boot-cube" style="--x:8%;--y:18%;--delay:.1s;--drift:-20px"></i>
-      <i class="boot-cube" style="--x:18%;--y:62%;--delay:.4s;--drift:25px"></i>
-      <i class="boot-cube" style="--x:29%;--y:28%;--delay:.7s;--drift:-15px"></i>
-      <i class="boot-cube" style="--x:42%;--y:70%;--delay:.2s;--drift:18px"></i>
-      <i class="boot-cube" style="--x:54%;--y:16%;--delay:.9s;--drift:-24px"></i>
-      <i class="boot-cube" style="--x:66%;--y:58%;--delay:.5s;--drift:20px"></i>
-      <i class="boot-cube" style="--x:78%;--y:25%;--delay:.3s;--drift:-18px"></i>
-      <i class="boot-cube" style="--x:88%;--y:68%;--delay:.8s;--drift:16px"></i>
-      <i class="boot-cube" style="--x:50%;--y:43%;--delay:1s;--drift:-10px"></i>
-      <i class="boot-cube" style="--x:35%;--y:48%;--delay:.6s;--drift:12px"></i>
-      <i class="boot-cube" style="--x:72%;--y:78%;--delay:.2s;--drift:-12px"></i>
-      <i class="boot-cube" style="--x:12%;--y:82%;--delay:1.1s;--drift:14px"></i>
-    </div>
-    <div class="startup-columns" aria-hidden="true">
-      <i style="--h:18%;--i:1"></i><i style="--h:42%;--i:2"></i><i style="--h:26%;--i:3"></i><i style="--h:62%;--i:4"></i><i style="--h:35%;--i:5"></i><i style="--h:76%;--i:6"></i><i style="--h:48%;--i:7"></i><i style="--h:30%;--i:8"></i><i style="--h:58%;--i:9"></i><i style="--h:22%;--i:10"></i><i style="--h:68%;--i:11"></i><i style="--h:38%;--i:12"></i>
-    </div>
-  </div>
-  <div class="startup-core">
-    <div class="startup-mark" aria-label="SAAD PS2">SAAD <span>PS2</span></div>
-    <div class="startup-subtitle">ARTWORK STATION</div>
-    <div class="startup-rule" aria-hidden="true"></div>
-    <div class="startup-status">جاري التحضير ...</div>
-    <div class="startup-progress" aria-hidden="true"></div>
-  </div>
+  <video class="startup-video" id="startupVideo" autoplay muted playsinline preload="auto" poster="./icon.svg" aria-label="SAAD PS2 intro">
+    <source src="./assets/startup.mp4" type="video/mp4">
+  </video>
+  <div class="startup-fallback" id="startupFallback" hidden>SAAD <span>PS2</span><small>ARTWORK STATION</small></div>
   <button class="startup-skip" id="skipStartup" type="button">تخطي المقدمة</button>
 </div>
 
@@ -1659,25 +1643,43 @@
     }
 
 
-    // Cinematic boot sequence for web/PWA and the Capacitor WebView.
+    // Play the supplied SAAD PS2 intro once per page load; never block the app.
     (() => {
       const screen = document.getElementById('startupScreen');
       const skip = document.getElementById('skipStartup');
-      if (!screen || !skip) return;
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const video = document.getElementById('startupVideo');
+      if (!screen || !skip || !video) return;
       let closed = false;
+      let fallbackTimer;
       const close = () => {
         if (closed) return;
         closed = true;
+        window.clearTimeout(fallbackTimer);
+        video.pause();
         screen.classList.add('is-leaving');
         window.setTimeout(() => screen.remove(), 950);
       };
+      const showFallback = () => {
+        screen.classList.add('video-failed');
+        const fallback = document.getElementById('startupFallback');
+        if (fallback) fallback.hidden = false;
+      };
       skip.addEventListener('click', close, { once: true });
-      // Keep the intro short; no sound is autoplayed. Browsers require a user gesture for audio.
-      window.setTimeout(close, reduceMotion ? 450 : 7600);
+      video.addEventListener('ended', close, { once: true });
+      video.addEventListener('error', showFallback, { once: true });
       document.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !closed) close();
-      }, { once: true });
+      });
+      fallbackTimer = window.setTimeout(close, 11500);
+      const playAttempt = video.play();
+      if (playAttempt && typeof playAttempt.catch === 'function') {
+        playAttempt.catch(() => showFallback());
+      }
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        video.pause();
+        showFallback();
+        fallbackTimer = window.setTimeout(close, 1200);
+      }
     })();
 
 </script>

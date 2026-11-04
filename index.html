@@ -547,6 +547,7 @@
 </div>
 
 <script src="./game-database.js"></script>
+<script src="./game-id-parser.js"></script>
 <script src="./saf-storage-bridge.bundle.js"></script>
 <script>
     // ---------- الإعدادات ----------
@@ -927,51 +928,9 @@
         await scanAndSyncArtwork();
     });
 
-    // قراءة SYSTEM.CNF من نظام ملفات ISO9660 (القطاع 2048 بايت) لاستخراج كود اللعبة بدقة
-    async function readSystemCnfId(file) {
-        try {
-            const SECTOR = 2048;
-            const pvd = new DataView(await file.slice(16 * SECTOR, 17 * SECTOR).arrayBuffer());
-            if (pvd.byteLength < SECTOR || pvd.getUint8(0) !== 1) return null;
-            const rootLba = pvd.getUint32(156 + 2, true);
-            const rootSize = pvd.getUint32(156 + 10, true);
-            const dirBytes = new Uint8Array(await file.slice(rootLba * SECTOR, rootLba * SECTOR + Math.min(rootSize, 64 * 1024)).arrayBuffer());
-            let off = 0;
-            while (off < dirBytes.length) {
-                const len = dirBytes[off];
-                if (len === 0) { off = (Math.floor(off / SECTOR) + 1) * SECTOR; continue; }
-                const dv = new DataView(dirBytes.buffer, dirBytes.byteOffset + off, len);
-                const nameLen = dv.getUint8(32);
-                const name = new TextDecoder('ascii').decode(dirBytes.slice(off + 33, off + 33 + nameLen));
-                if (/^SYSTEM\.CNF/i.test(name)) {
-                    const lba = dv.getUint32(2, true);
-                    const size = Math.min(dv.getUint32(10, true), 4096);
-                    const text = new TextDecoder('ascii').decode(await file.slice(lba * SECTOR, lba * SECTOR + size).arrayBuffer());
-                    const m = text.match(/BOOT2?\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-                    return m ? normalizeId(m[1]) : null;
-                }
-                off += len;
-            }
-        } catch (e) {}
-        return null;
-    }
-
+    // يعتمد التعرف على SYSTEM.CNF أولاً؛ لا يجري مسحاً عاماً لبيانات ISO بحثاً عن أرقام عشوائية.
     async function extractGameIdFromIso(file) {
-        const fromCnf = await readSystemCnfId(file);
-        if (fromCnf) return fromCnf;
-
-        const maxScanBytes = Math.min(file.size, 4 * 1024 * 1024);
-        const buffer = await file.slice(0, maxScanBytes).arrayBuffer();
-        const text = new TextDecoder('ascii').decode(buffer);
-
-        const bootMatch = text.match(/BOOT2\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-        if (bootMatch) return normalizeId(bootMatch[1]);
-
-        const genericMatch = text.match(/([SPL][LCB][UEPKAJ][SDMXP]_\d{3}\.\d{2})/i);
-        if (genericMatch) return normalizeId(genericMatch[1]);
-
-        const anyName = file.name.match(/([A-Z]{4}[_-]\d{3}\.\d{2})/i);
-        return anyName ? normalizeId(anyName[1]) : null;
+        return window.SaadPs2GameId.extractGameIdFromIso(file);
     }
 
     async function parseUlCfg(fileHandle) {

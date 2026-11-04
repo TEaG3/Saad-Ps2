@@ -1008,15 +1008,17 @@
         const file = await fileHandle.getFile();
         const bytes = new Uint8Array(await file.arrayBuffer());
         const games = [];
-
+        const decoder = new TextDecoder('utf-8');
+        // OPL ul.cfg: كل سجل 64 بايت؛ اسم ملف UL في أول 32 بايت والعنوان في آخر 32.
         for (let offset = 0; offset + 64 <= bytes.length; offset += 64) {
-            const name = new TextDecoder('utf-8').decode(bytes.slice(offset, offset + 32)).replace(/\0+$/, '').trim();
-            const rawId = new TextDecoder('ascii').decode(bytes.slice(offset + 32, offset + 47)).replace(/\0+$/, '').trim();
-            const cleanId = normalizeId(rawId.replace(/^ul\./i, ''));
-
-            if (name && isValidGameId(cleanId)) {
-                games.push({ title: name, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
-            }
+            const fileField = decoder.decode(bytes.slice(offset, offset + 32)).replace(/\0+$/g, '').trim();
+            const titleField = decoder.decode(bytes.slice(offset + 32, offset + 64)).replace(/\0+$/g, '').trim();
+            const idMatch = fileField.match(/(?:^|[./\\])ul\.([A-Z]{4}[_-]\d{3}\.\d{2})(?:\.\d{2})?/i);
+            if (!idMatch) continue;
+            const cleanId = normalizeId(idMatch[1]);
+            if (!isValidGameId(cleanId)) continue;
+            const title = (titleField || fileField).replace(/[\0-\x1f]/g, '').trim();
+            games.push({ title: title || cleanId, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
         }
         return games;
     }

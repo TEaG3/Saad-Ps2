@@ -1,4 +1,4 @@
-const CACHE_NAME = 'saad-ps2-pwa-v6';
+const CACHE_NAME = 'saad-ps2-pwa-v7';
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './game-database.js', './game-id-parser.js', './database/manifest.json', './database/catalog.json'];
 
 self.addEventListener('install', (event) => {

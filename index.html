@@ -1207,6 +1207,19 @@
 
     // ---------- جلب الصور ----------
     async function fetchGameCoverBlob(gameId) {
+        const scanned = detectedGames.find(game => game.gameId === gameId);
+        const preferredUrl = scanned && scanned.coverUrl;
+        if (sourceMode.value === 'online' && preferredUrl) {
+            try {
+                const response = await fetchWithTimeout(preferredUrl);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const bitmap = await decodeImage(blob);
+                    bitmap.close && bitmap.close();
+                    return blob;
+                }
+            } catch (error) { console.info('تعذر جلب الغلاف من سجل الكتالوج؛ ستتم تجربة المصادر البديلة.', error); }
+        }
         if (sourceMode.value === 'offline') {
             if (!offlineFolderHandle) {
                 throw new Error('اختر مجلد الصور الأوفلاين أولاً.');

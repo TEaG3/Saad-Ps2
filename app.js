@@ -13,7 +13,7 @@
         coverWidth: 140,
         coverHeight: 200,
         iconSize: 64,
-        fetchTimeoutMs: 12000,
+        fetchTimeoutMs: 25000,
         maxScanBytes: 4 * 1024 * 1024,
         maxManualImageBytes: 12 * 1024 * 1024,
         rawBase: 'https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default',
@@ -392,6 +392,8 @@
         return Promise.resolve({
             write: function (data) {
                 pending = data instanceof Blob ? data : new Blob([data]);
+                // Match the File System Access API contract: write() is awaitable.
+                return Promise.resolve();
             },
             close: function () {
                 if (!pending) pending = new Blob([]);
@@ -1392,7 +1394,13 @@
             if (needs.cover) {
                 var jpeg = await toCoverJpeg(bitmap);
                 var coverName = game.gameId + '_COV.jpg';
+                // OPL reads artwork from ART/. Also place a convenient copy beside
+                // DVD/CD ISO files so the artwork is visible in the game's folder.
                 await writeFile(artDirHandle, coverName, jpeg);
+                if (game.folder === 'DVD' || game.folder === 'CD') {
+                    var gameFolder = await state.rootHandle.getDirectoryHandle(game.folder);
+                    await writeFile(gameFolder, coverName, jpeg);
+                }
                 game.hasCover = true;
                 game.coverHandle = await artDirHandle.getFileHandle(coverName);
                 state.artFiles.set(coverName.toUpperCase(), game.coverHandle);

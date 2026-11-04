@@ -407,7 +407,7 @@
     </div>
 
     <h2 class="section-title" id="browse">اختر مخزن الألعاب</h2>
-    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART دون فتح كل لعبة على حدة.</p>
+    <p class="section-sub">حدد مجلد الفلاش الرئيسي (الجذر) مرة واحدة وامنح صلاحية الوصول. سيفحص التطبيق الألعاب تلقائياً ثم يستخرج Game ID ويجلب الأغلفة والأيقونات الناقصة ويحفظها داخل ART دون فتح كل لعبة على حدة.</p>
 
     <div class="control-panel">
         <div class="browse-grid">
@@ -533,7 +533,7 @@
     </div>
 
     <footer>
-        الأغلفة تُحفظ بمقاس OPL القياسي 140×200 بصيغة PNG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_COV.png</code>،
+        الأغلفة تُحفظ بمقاس 140×200 بصيغة JPEG داخل مجلد ART بالاسمين <code dir="ltr">SLUS_200.62_COV.jpg</code> و<code dir="ltr">SLUS_200.62.jpg</code>،
         وأيقونات القرص بمقاس 64×64 بصيغة PNG داخل مجلد ART باسم <code dir="ltr">SLUS_200.62_ICO.png</code>. يعمل على Chrome وEdge، وللاستخدام مع PS2 يُفضّل تهيئة الفلاش بنظام FAT32؛ توافق exFAT يعتمد على إصدار OPL ولا يُضمن.<br>
         كل المعالجة تتم داخل متصفحك، ولا يُرفع أي ملف من الفلاش إلى أي سيرفر.
     </footer>
@@ -792,7 +792,7 @@
     }
 
     // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 بصيغة PNG دون ضغط فقدي.
-    async function toCoverPng(blob, bitmap) {
+    async function toCoverJpeg(blob, bitmap) {
         const canvas = document.createElement('canvas');
         canvas.width = COVER_WIDTH;
         canvas.height = COVER_HEIGHT;
@@ -807,7 +807,7 @@
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
-        return canvasToBlob(canvas, 'image/png');
+        return canvasToBlob(canvas, 'image/jpeg', 0.92);
     }
 
     // أيقونة القرص: OPL القياسي 64×64 بصيغة PNG.
@@ -833,10 +833,14 @@
         try { await writable.write(data); } finally { await writable.close(); }
         const saved = await fileHandle.getFile();
         if (saved.size < 128 || saved.size !== data.size) throw new Error(`فشل التحقق من حجم الملف ${fileName}`);
-        if (fileName.toLowerCase().endsWith('.png')) {
+        const lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith('.png')) {
             const signature = new Uint8Array(await saved.slice(0, 8).arrayBuffer());
             const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
             if (signature.some((byte, i) => byte !== pngSignature[i])) throw new Error(`ملف PNG غير صالح: ${fileName}`);
+        } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+            const signature = new Uint8Array(await saved.slice(0, 3).arrayBuffer());
+            if (signature[0] !== 0xFF || signature[1] !== 0xD8 || signature[2] !== 0xFF) throw new Error(`ملف JPEG غير صالح: ${fileName}`);
         }
         const expected = new Uint8Array(await data.slice(0, Math.min(16, data.size)).arrayBuffer());
         const actual = new Uint8Array(await saved.slice(0, expected.length).arrayBuffer());
@@ -1079,42 +1083,16 @@
     async function checkExistingArtwork(games) {
         artHandles = new Map();
         try { artHandles = await listDir(await usbRootHandle.getDirectoryHandle('ART')); } catch (e) {}
-
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            // نعطي الأولوية دائماً لملف PNG. ملفات JPG القديمة تُعامل كمصدر للتحويل
-            // ولا تُعتبر مكتملة حتى ننشئ النسخة الجديدة بصيغة PNG.
-            const pngCoverNames = [`${id}_COV.PNG`, `${id}.PNG`];
-            const legacyCoverNames = [`${id}_COV.JPG`, `${id}.JPG`, `${id}_COV.JPEG`, `${id}.JPEG`];
+            const coverNames = [`${id}_COV.JPG`, `${id}.JPG`, `${id}_COV.JPEG`, `${id}.JPEG`, `${id}_COV.PNG`, `${id}.PNG`];
             game.coverHandle = null;
-            game.legacyCoverHandle = null;
-            for (const name of pngCoverNames) {
+            for (const name of coverNames) {
                 const handle = artHandles.get(name);
-                if (await isUsableImageHandle(handle)) {
-                    game.coverHandle = handle;
-                    break;
-                }
-            }
-            if (!game.coverHandle) {
-                for (const name of legacyCoverNames) {
-                    const handle = artHandles.get(name);
-                    if (await isUsableImageHandle(handle)) {
-                        game.legacyCoverHandle = handle;
-                        break;
-                    }
-                }
+                if (await isUsableImageHandle(handle)) { game.coverHandle = handle; break; }
             }
             game.hasCover = !!game.coverHandle;
-
-            // لا نعدّ أيقونة JPG مكتملة؛ يجب أن تكون أيقونة OPL الناتجة PNG.
-            const pngIconNames = [`${id}_ICO.PNG`, `${id}.PNG`];
-            game.hasIcon = false;
-            for (const name of pngIconNames) {
-                if (await isUsableImageHandle(artHandles.get(name))) {
-                    game.hasIcon = true;
-                    break;
-                }
-            }
+            game.hasIcon = await isUsableImageHandle(artHandles.get(`${id}_ICO.PNG`));
         }
     }
 
@@ -1311,7 +1289,7 @@
                     } else if (img.dataset.offlineGame) {
                         const variants = idVariants(img.dataset.offlineGame);
                         const names = [variants.dot, variants.serial, variants.dashDot]
-                            .flatMap(n => [`${n}.JPG`, `${n}.PNG`, `${n}_COV.JPG`, `${n}_COV.PNG`]);
+                            .flatMap(n => [`${n}_COV.JPG`, `${n}.JPG`, `${n}_COV.PNG`, `${n}.PNG`, `${n}_COV.JPEG`, `${n}.JPEG`]);
                         handle = names.map(n => offlineFiles.get(n)).find(Boolean) || null;
                     }
                     if (!handle) { img.style.opacity = '0.2'; continue; }
@@ -1354,7 +1332,7 @@
                 throw new Error('اختر مجلد الصور الأوفلاين أولاً.');
             }
             const v = idVariants(gameId);
-            const names = [v.dot, v.serial, v.dashDot].flatMap(n => [`${n}.PNG`, `${n}.JPG`, `${n}_COV.PNG`, `${n}_COV.JPG`]);
+            const names = [v.dot, v.serial, v.dashDot].flatMap(n => [`${n}_COV.JPG`, `${n}.JPG`, `${n}_COV.PNG`, `${n}.PNG`, `${n}_COV.JPEG`, `${n}.JPEG`]);
             for (const name of names) {
                 const handle = offlineFiles.get(name);
                 if (!handle) continue;
@@ -1388,10 +1366,13 @@
         const bitmap = await decodeImage(sourceBlob);
         try {
             if (cover) {
-                const png = await toCoverPng(sourceBlob, bitmap);
-                const coverName = `${game.gameId}_COV.png`;
-                if (overwrite) await backupExisting(artDirHandle, coverName);
-                game.coverHandle = await writeFile(artDirHandle, coverName, png);
+                const jpeg = await toCoverJpeg(sourceBlob, bitmap);
+                const coverNames = [`${game.gameId}_COV.jpg`, `${game.gameId}.jpg`];
+                for (const coverName of coverNames) {
+                    if (overwrite) await backupExisting(artDirHandle, coverName);
+                    const savedHandle = await writeFile(artDirHandle, coverName, jpeg);
+                    if (coverName.endsWith('_COV.jpg')) game.coverHandle = savedHandle;
+                }
                 game.hasCover = true;
             }
             if (icon) {
@@ -1401,9 +1382,7 @@
                 await writeFile(artDirHandle, iconName, png);
                 game.hasIcon = true;
             }
-        } finally {
-            bitmap.close && bitmap.close();
-        }
+        } finally { bitmap.close && bitmap.close(); }
     }
 
     let artDirHandle = null;
@@ -1418,13 +1397,9 @@ async function ensureDirs() {
 
         let source = null;
         if (needCover) {
-            // إذا وجدنا غلاف JPG قديماً، نحوله محلياً إلى PNG بدلاً من تجاوزه
-            // أو طلب نسخة جديدة من الإنترنت.
-            source = game.legacyCoverHandle
-                ? await game.legacyCoverHandle.getFile()
-                : await fetchGameCoverBlob(game.gameId);
+            source = await fetchGameCoverBlob(game.gameId);
         } else if (needIcon && game.coverHandle) {
-            source = await game.coverHandle.getFile(); // الغلاف PNG موجود: نشتق منه الأيقونة
+            source = await game.coverHandle.getFile();
         }
         if (!needCover && !needIcon) return 'skip';
         if (!source) return 'fail';

@@ -728,11 +728,14 @@
             if (!maxBytes) return null;
             return file.slice(0, maxBytes).arrayBuffer().then(function (buffer) {
                 var text = new TextDecoder('latin1').decode(buffer);
-                var bootMatch = text.match(/BOOT2\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
+                // لا نأخذ أول كود يشبه رقم لعبة من بيانات ISO عشوائية؛
+                // قد يكون كوداً مضمناً لملف آخر ويؤدي لربط غلاف لعبة خاطئة.
+                var bootMatch = text.match(/BOOT2?\s*=\s*cdrom0:\\?([A-Z]{4}[_-]\d{3}\.\d{2})/i);
                 if (bootMatch) return normalizeId(bootMatch[1]);
-                var generic = text.match(/([SPL][LCB][UEPKAJ][SDMXP]_\d{3}\.\d{2})/i);
-                if (generic) return normalizeId(generic[1]);
-                var fromName = String(file.name || '').match(/([A-Z]{4}[_-]\d{3}\.\d{2})/i);
+
+                // عند تعذّر قراءة SYSTEM.CNF، نعتمد اسم الملف فقط إذا احتوى
+                // معرّفاً صريحاً، وإلا نترك اللعبة غير معرّفة بدلاً من التخمين.
+                var fromName = String(file.name || '').match(/(?:^|[^A-Z0-9])([A-Z]{4}[_-]\d{3}\.\d{2})(?:[^0-9]|$)/i);
                 return fromName ? normalizeId(fromName[1]) : null;
             });
         }).catch(function () { return null; });

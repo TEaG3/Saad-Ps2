@@ -64,7 +64,7 @@ The current `index.html` contains dedicated functions for:
 
 ## 5. Static structure checks
 - Main page is Arabic-first (`lang="ar"`, `dir="rtl"`).
-- 46 distinct HTML IDs were found in `index.html`; no duplicate IDs were found in this pass.
+- HTML IDs were inventoried and checked for duplicates; no duplicate IDs were found in this pass.
 - Existing responsive breakpoints: 820px, 700px, and 520px.
 - At <=820px the browse layout becomes one column.
 - At <=700px the games table is transformed into stacked mobile rows and the statistics use two columns.

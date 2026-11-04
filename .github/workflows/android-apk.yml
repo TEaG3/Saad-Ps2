@@ -100,7 +100,15 @@ jobs:
           # Release variant is optimized but signed with Android's temporary debug key
           # so it can be installed directly for device testing. A private upload key
           # is required later for Play Store publication and trusted app updates.
-          printf '\\nandroid { buildTypes { release { signingConfig signingConfigs.debug } } }\\n' >> app/build.gradle
+          cat >> app/build.gradle <<'EOF'
+          android {
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
           ./gradlew assembleDebug assembleRelease
       - uses: actions/upload-artifact@v6
         with:

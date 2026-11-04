@@ -1381,6 +1381,7 @@
         if (targets.length === 0) { alert('جميع الألعاب تمتلك أغلفة وأيقونات بالفعل!'); return; }
         if (sourceMode.value === 'offline' && !offlineFolderHandle) { alert('اختر مجلد الصور الأوفلاين أولاً.'); return; }
 
+        const alreadyReadyBefore = detectedGames.filter(g => !isMissing(g)).length;
         isBusy = true;
         cancelRequested = false;
         updateButtons();
@@ -1442,14 +1443,13 @@
         $('btnCancel').disabled = true;
         isBusy = false;
         lastFailed = failed;
-        showReport(successful, failed, cancelled ? remaining : 0);
+        showReport(successful, failed, cancelled ? remaining : 0, alreadyReadyBefore);
         render();
     }
 
-    function showReport(successful, failed, skipped) {
+    function showReport(successful, failed, skipped, alreadyReady) {
         const el = $('report');
         const total = successful + failed.length + skipped;
-        const alreadyReady = detectedGames.filter(g => !isMissing(g)).length;
         let html = '<strong>تقرير المزامنة:</strong> إجمالي الألعاب ' + detectedGames.length +
             '؛ كانت مكتملة مسبقاً ' + alreadyReady +
             '؛ تمت مزامنة ' + successful +

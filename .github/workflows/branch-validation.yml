@@ -1,6 +1,9 @@
 name: Saad PS2 Branch Validation
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - ux/audit-and-mobile-refresh

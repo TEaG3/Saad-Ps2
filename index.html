@@ -441,6 +441,9 @@
         <div class="stat-card"><h3 id="statIso">0</h3><span>ألعاب بصيغة ISO</span></div>
         <div class="stat-card"><h3 id="statUl">0</h3><span>ألعاب مقسمة (ul.cfg)</span></div>
         <div class="stat-card"><h3 id="statReady">0</h3><span>أغلفة جاهزة بالفلاش</span></div>
+        <div class="stat-card"><h3 id="statIcons">0</h3><span>أيقونات جاهزة بالفلاش</span></div>
+        <div class="stat-card"><h3 id="statNoCover">0</h3><span>ألعاب بلا غلاف</span></div>
+        <div class="stat-card"><h3 id="statNoIcon">0</h3><span>ألعاب بلا أيقونة</span></div>
         <div class="stat-card"><h3 id="statMissing">0</h3><span>ألعاب ينقصها غلاف أو أيقونة</span></div>
     </div>
 
@@ -508,7 +511,7 @@
                     <th>كود اللعبة (Game ID)</th>
                     <th>الصيغة</th>
                     <th>حالة الغلاف (ART)</th>
-                    <th>حالة الأيقونة (ICONS)</th>
+                    <th>حالة الأيقونة (ART)</th>
                     <th>إجراءات</th>
                 </tr>
             </thead>
@@ -729,7 +732,12 @@
     }
 
     function normalizeId(raw) {
-        return raw.toUpperCase().replace('-', '_');
+        const value = String(raw || '').trim().toUpperCase().replace('-', '_');
+        return /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value) ? value : null;
+    }
+
+    function isValidGameId(value) {
+        return typeof value === 'string' && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(value);
     }
 
     // يحوّل SLUS_200.62 إلى أشكال الأسماء الشائعة في مصادر الأغلفة
@@ -748,6 +756,7 @@
         const v = idVariants(gameId);
         // الأولوية: أغلفة PS2 القياسية من xlenore، ثم GameTDB، ثم صيغ أسماء بديلة للتوافق.
         // لا نستخدم أغلفة 3D هنا حتى لا نستبدل غلاف OPL الأمامي بصورة صندوق ثلاثية الأبعاد.
+        if (!isValidGameId(gameId)) return [];
         const urls = [`${RAW_BASE}/${v.serial}.jpg`];
         const region = GAMETDB_REGION[v.prefix];
         if (region) urls.push(`https://art.gametdb.com/ps2/cover/${region}/${v.serial}.jpg`);
@@ -773,13 +782,18 @@
 
     function canvasToBlob(canvas, type, quality) {
         return new Promise((resolve, reject) => {
-            canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas.toBlob failed')), type, quality);
+            canvas.toBlob(blob => {
+                if (!blob || blob.size < 128 || blob.type !== type) {
+                    reject(new Error('تعذر إنشاء صورة سليمة أو أن حجمها صفر.'));
+                    return;
+                }
+                resolve(blob);
+            }, type, quality);
         });
     }
 
-    // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 مع قص مركزي يحافظ على التناسب.
-    // نحفظ غلاف OPL بصيغة PNG وبالمقاس القياسي 140×200.
-    async function toCoverPng(blob, bitmap) {
+    // يحوّل كل غلاف إلى مقاس OPL القياسي 140×200 بصيغة PNG دون ضغط فقدي.
+    async function toCoverJpeg(blob, bitmap) {
         const canvas = document.createElement('canvas');
         canvas.width = COVER_WIDTH;
         canvas.height = COVER_HEIGHT;
@@ -794,7 +808,7 @@
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
-        return canvasToBlob(canvas, 'image/png');
+        return canvasToBlob(canvas, 'image/jpeg', 0.92);
     }
 
     // أيقونة القرص: OPL القياسي 64×64 بصيغة PNG.
@@ -813,21 +827,43 @@
         return canvasToBlob(canvas, 'image/png');
     }
 
-    async function writeFile(directoryHandle, fileName, data, overwrite = false) {
-        if (!overwrite) {
-            try {
-                await directoryHandle.getFileHandle(fileName);
-                throw new Error(`الملف موجود مسبقاً ولن يتم استبداله: ${fileName}`);
-            } catch (error) {
-                if (error && error.message && error.message.startsWith('الملف موجود مسبقاً')) throw error;
-            }
-        }
+    async function writeFile(directoryHandle, fileName, data) {
+        if (!data || !Number.isFinite(data.size) || data.size < 128) throw new Error(`تم منع حفظ ملف فارغ أو تالف: ${fileName}`);
         const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
+        try { await writable.write(data); } finally { await writable.close(); }
+        const saved = await fileHandle.getFile();
+        if (saved.size < 128 || saved.size !== data.size) throw new Error(`فشل التحقق من حجم الملف ${fileName}`);
+        const lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith('.png')) {
+            const signature = new Uint8Array(await saved.slice(0, 8).arrayBuffer());
+            const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+            if (signature.some((byte, i) => byte !== pngSignature[i])) throw new Error(`ملف PNG غير صالح: ${fileName}`);
+        } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+            const signature = new Uint8Array(await saved.slice(0, 3).arrayBuffer());
+            if (signature[0] !== 0xFF || signature[1] !== 0xD8 || signature[2] !== 0xFF) throw new Error(`ملف JPEG غير صالح: ${fileName}`);
+        }
+        const expected = new Uint8Array(await data.slice(0, Math.min(16, data.size)).arrayBuffer());
+        const actual = new Uint8Array(await saved.slice(0, expected.length).arrayBuffer());
+        if (expected.some((byte, i) => byte !== actual[i])) throw new Error(`فشل التحقق من محتوى الملف ${fileName}`);
+        return fileHandle;
+    }
+
+    async function backupExisting(directoryHandle, fileName) {
         try {
-            await writable.write(data);
-        } finally {
-            await writable.close();
+            const existing = await directoryHandle.getFileHandle(fileName);
+            const file = await existing.getFile();
+            const backupDir = await usbRootHandle.getDirectoryHandle('BACKUP', { create: true });
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const target = await backupDir.getFileHandle(`${stamp}_${fileName}`, { create: true });
+            const writer = await target.createWritable();
+            try { await writer.write(file); } finally { await writer.close(); }
+            const copied = await target.getFile();
+            if (copied.size !== file.size) throw new Error(`تعذر التحقق من النسخة الاحتياطية: ${fileName}`);
+            return true;
+        } catch (error) {
+            if (error && error.name === 'NotFoundError') return false;
+            throw error;
         }
     }
 
@@ -945,15 +981,17 @@
         const file = await fileHandle.getFile();
         const bytes = new Uint8Array(await file.arrayBuffer());
         const games = [];
-
+        const decoder = new TextDecoder('utf-8');
+        // OPL ul.cfg: كل سجل 64 بايت؛ اسم ملف UL في أول 32 بايت والعنوان في آخر 32.
         for (let offset = 0; offset + 64 <= bytes.length; offset += 64) {
-            const name = new TextDecoder('utf-8').decode(bytes.slice(offset, offset + 32)).replace(/\0+$/, '').trim();
-            const rawId = new TextDecoder('ascii').decode(bytes.slice(offset + 32, offset + 47)).replace(/\0+$/, '').trim();
-            const cleanId = rawId.replace(/^ul\./i, '').toUpperCase();
-
-            if (name && /^[A-Z]{4}_\d{3}\.\d{2}$/.test(cleanId)) {
-                games.push({ title: name, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
-            }
+            const fileField = decoder.decode(bytes.slice(offset, offset + 32)).replace(/\0+$/g, '').trim();
+            const titleField = decoder.decode(bytes.slice(offset + 32, offset + 64)).replace(/\0+$/g, '').trim();
+            const idMatch = fileField.match(/(?:^|[./\\])ul\.([A-Z]{4}[_-]\d{3}\.\d{2})(?:\.\d{2})?/i);
+            if (!idMatch) continue;
+            const cleanId = normalizeId(idMatch[1]);
+            if (!isValidGameId(cleanId)) continue;
+            const title = (titleField || fileField).replace(/[\0-\x1f]/g, '').trim();
+            games.push({ title: title || cleanId, gameId: cleanId, format: 'UL', hasCover: false, hasIcon: false });
         }
         return games;
     }
@@ -978,19 +1016,38 @@
         return list;
     }
 
+    async function isUsableImageHandle(handle) {
+        if (!handle) return false;
+        try {
+            const file = await handle.getFile();
+            if (!file || file.size < 128) return false;
+            if (handle.name.toLowerCase().endsWith('.png')) {
+                const signature = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+                const expected = [137, 80, 78, 71, 13, 10, 26, 10];
+                if (signature.some((byte, i) => byte !== expected[i])) return false;
+            }
+            const bitmap = await decodeImage(file);
+            const valid = bitmap.width > 0 && bitmap.height > 0;
+            bitmap.close && bitmap.close();
+            return valid;
+        } catch (error) {
+            return false;
+        }
+    }
+
     async function checkExistingArtwork(games) {
         artHandles = new Map();
-        let iconFiles = new Map();
-
         try { artHandles = await listDir(await usbRootHandle.getDirectoryHandle('ART')); } catch (e) {}
-        try { iconFiles = await listDir(await usbRootHandle.getDirectoryHandle('ICONS')); } catch (e) {}
-
         for (const game of games) {
             const id = game.gameId.toUpperCase();
-            const coverName = [`${id}_COV.PNG`, `${id}_COV.JPG`, `${id}.PNG`, `${id}.JPG`].find(n => artHandles.has(n));
-            game.coverHandle = coverName ? artHandles.get(coverName) : null;
-            game.hasCover = !!coverName;
-            game.hasIcon = [`${id}_ICO.PNG`, `${id}.PNG`, `${id}.JPG`].some(n => iconFiles.has(n));
+            const coverNames = [`${id}_COV.JPG`, `${id}.JPG`, `${id}_COV.JPEG`, `${id}.JPEG`, `${id}_COV.PNG`, `${id}.PNG`];
+            game.coverHandle = null;
+            for (const name of coverNames) {
+                const handle = artHandles.get(name);
+                if (await isUsableImageHandle(handle)) { game.coverHandle = handle; break; }
+            }
+            game.hasCover = !!game.coverHandle;
+            game.hasIcon = await isUsableImageHandle(artHandles.get(`${id}_ICO.PNG`));
         }
     }
 
@@ -1099,6 +1156,9 @@
         $('statIso').textContent = detectedGames.filter(g => g.format === 'ISO').length;
         $('statUl').textContent = detectedGames.filter(g => g.format === 'UL').length;
         $('statReady').textContent = detectedGames.filter(g => g.hasCover).length;
+        $('statIcons').textContent = detectedGames.filter(g => g.hasIcon).length;
+        $('statNoCover').textContent = detectedGames.filter(g => !g.hasCover).length;
+        $('statNoIcon').textContent = detectedGames.filter(g => !g.hasIcon).length;
         $('statMissing').textContent = detectedGames.filter(isMissing).length;
 
         updateButtons();
@@ -1153,7 +1213,7 @@
                     <td data-label="الكود" style="font-family:monospace; color:var(--accent);" dir="ltr">${escapeHtml(game.gameId)}</td>
                     <td data-label="الصيغة"><span class="badge ${game.format === 'ISO' ? 'badge-iso' : 'badge-ul'}">${escapeHtml(game.format)}</span></td>
                     <td data-label="الغلاف (ART)"><span class="badge ${game.hasCover ? 'badge-ok' : 'badge-missing'}">${game.hasCover ? 'متوفر ✓' : 'ناقص ✗'}</span></td>
-                    <td data-label="الأيقونة (ICONS)"><span class="badge ${game.hasIcon ? 'badge-ok' : 'badge-missing'}">${game.hasIcon ? 'متوفر ✓' : 'ناقص ✗'}</span></td>
+                    <td data-label="الأيقونة (ART)"><span class="badge ${game.hasIcon ? 'badge-ok' : 'badge-missing'}">${game.hasIcon ? 'متوفر ✓' : 'ناقص ✗'}</span></td>
                     <td data-label="إجراءات">${actions}</td>
                 </tr>`;
         }).join('');
@@ -1263,19 +1323,23 @@
         const bitmap = await decodeImage(sourceBlob);
         try {
             if (cover) {
-                const png = await toCoverPng(sourceBlob, bitmap);
-                await writeFile(artDirHandle, `${game.gameId}_COV.png`, png, overwrite);
+                const jpeg = await toCoverJpeg(sourceBlob, bitmap);
+                const coverNames = [`${game.gameId}_COV.jpg`, `${game.gameId}.jpg`];
+                for (const coverName of coverNames) {
+                    if (overwrite) await backupExisting(artDirHandle, coverName);
+                    const savedHandle = await writeFile(artDirHandle, coverName, jpeg);
+                    if (coverName.endsWith('_COV.jpg')) game.coverHandle = savedHandle;
+                }
                 game.hasCover = true;
-                game.coverHandle = await artDirHandle.getFileHandle(`${game.gameId}_COV.png`);
             }
             if (icon) {
                 const png = await toIconPng(bitmap);
-                await writeFile(iconDirHandle, `${game.gameId}_ICO.png`, png, overwrite);
+                const iconName = `${game.gameId}_ICO.png`;
+                if (overwrite) await backupExisting(artDirHandle, iconName);
+                await writeFile(artDirHandle, iconName, png);
                 game.hasIcon = true;
             }
-        } finally {
-            bitmap.close && bitmap.close();
-        }
+        } finally { bitmap.close && bitmap.close(); }
     }
 
     let artDirHandle = null;
@@ -1283,7 +1347,6 @@
 
     async function ensureDirs() {
         artDirHandle = await usbRootHandle.getDirectoryHandle('ART', { create: true });
-        iconDirHandle = await usbRootHandle.getDirectoryHandle('ICONS', { create: true });
     }
 
     // يعالج لعبة واحدة ويرجع 'ok' أو 'fail'
@@ -1295,8 +1358,9 @@
         if (needCover) {
             source = await fetchGameCoverBlob(game.gameId);
         } else if (needIcon && game.coverHandle) {
-            source = await game.coverHandle.getFile(); // الغلاف موجود: نشتق منه الأيقونة بدون تحميل
+            source = await game.coverHandle.getFile();
         }
+        if (!needCover && !needIcon) return 'skip';
         if (!source) return 'fail';
 
         await saveArtwork(game, source, { cover: needCover, icon: needIcon, overwrite });

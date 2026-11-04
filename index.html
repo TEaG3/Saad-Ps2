@@ -1265,7 +1265,7 @@
             }
         }, { rootMargin: '200px' });
 
-        container.querySelectorAll('img[data-local]').forEach(img => previewObserver.observe(img));
+        container.querySelectorAll('img[data-local], img[data-offline-game]').forEach(img => previewObserver.observe(img));
 
         container.querySelectorAll('img[data-fallback]').forEach(img => {
             const row = img.closest('[data-idx]');

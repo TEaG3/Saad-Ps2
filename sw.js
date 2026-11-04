@@ -1,5 +1,5 @@
-const CACHE_NAME = 'saad-ps2-pwa-v13';
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './game-database.js', './database/manifest.json', './database/catalog.json', './assets/gemini_generated_video_B368FFB9.mp4'];
+const CACHE_NAME = 'saad-ps2-pwa-v14';
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './game-database.js', './database/manifest.json', './database/catalog.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

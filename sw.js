@@ -4,7 +4,7 @@
    - JS/CSS/المانيفست: Network-first أيضاً حتى لا يتزاوج HTML جديد مع أصول قديمة.
    - بقية الأصول (أيقونات، كتالوج JSON): Cache-first مع تحديث في الخلفية.
    ========================================================================== */
-var CACHE_NAME = 'saad-ps2-v10';
+var CACHE_NAME = 'saad-ps2-v11';
 var APP_SHELL = [
   './',
   './index.html',
@@ -34,8 +34,11 @@ self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys()
       .then(function (keys) {
-        return Promise.all(keys.filter(function (key) { return key !== CACHE_NAME; })
-          .map(function (key) { return caches.delete(key); }));
+        return Promise.all(keys.filter(function (key) {
+          // لا تحذف أي Cache تابع لموقع آخر على النطاق نفسه.
+          // نحذف فقط الإصدارات السابقة التي أنشأها Saad PS2.
+          return key.indexOf('saad-ps2-') === 0 && key !== CACHE_NAME;
+        }).map(function (key) { return caches.delete(key); }));
       })
       .then(function () { return self.clients.claim(); })
   );

@@ -1,37 +1,25 @@
-/* ==========================================================================
-   Saad PS2 — قاعدة البيانات المحلية (IndexedDB)
-   - games : مكتبة الألعاب المتعرّف عليها محلياً + سجلات الكتالوج المركزي
-   - meta  : إصدار الكتالوج وتاريخ آخر مزامنة
-   لا تُرسل أي بيانات إلى أي خادم؛ المزامنة تقرأ ملفات الكتالوج فقط.
-   ========================================================================== */
 (function () {
   'use strict';
 
-  var DB_NAME = 'saad-ps2-library';
-  var DB_VERSION = 1;
-  var CATALOG_MANIFEST_URL = './database/manifest.json';
-  var CATALOG_URL = './database/catalog.json';
-  var MAX_IMPORT_RECORDS = 20000;
-
-  var db = null;
-  var catalogStatus = 'local';
-  var lastSync = null;
-
-  function normalizeId(raw) {
-    return String(raw || '').toUpperCase().replace(/-/g, '_').trim();
-  }
+  const DB_NAME = 'saad-ps2-library';
+  const DB_VERSION = 1;
+  const CATALOG_MANIFEST_URL = './database/manifest.json';
+  const CATALOG_URL = './database/catalog.json';
+  let db = null;
+  let catalogStatus = 'local';
+  let lastSync = null;
 
   function openDatabase() {
-    return new Promise(function (resolve, reject) {
+    return new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) {
-        reject(new Error('IndexedDB غير مدعوم في هذا المتصفح.'));
+        reject(new Error('IndexedDB is not supported'));
         return;
       }
-      var request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = function () {
-        var database = request.result;
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const database = request.result;
         if (!database.objectStoreNames.contains('games')) {
-          var store = database.createObjectStore('games', { keyPath: 'gameId' });
+          const store = database.createObjectStore('games', { keyPath: 'gameId' });
           store.createIndex('title', 'title', { unique: false });
           store.createIndex('lastSeen', 'lastSeen', { unique: false });
         }
@@ -39,56 +27,52 @@
           database.createObjectStore('meta', { keyPath: 'key' });
         }
       };
-      request.onsuccess = function () { resolve(request.result); };
-      request.onerror = function () { reject(request.error || new Error('تعذّر فتح قاعدة البيانات.')); };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Database open failed'));
     });
   }
 
   function requestResult(request) {
-    return new Promise(function (resolve, reject) {
-      request.onsuccess = function () { resolve(request.result); };
-      request.onerror = function () { reject(request.error || new Error('فشل طلب قاعدة البيانات.')); };
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Database request failed'));
     });
   }
 
-  function requireDb() {
-    if (!db) throw new Error('قاعدة البيانات غير مهيأة.');
-    return db;
+  async function getAllGames() {
+    const tx = db.transaction('games', 'readonly');
+    return requestResult(tx.objectStore('games').getAll());
   }
 
-  function getAllGames() {
-    return requestResult(requireDb().transaction('games', 'readonly').objectStore('games').getAll());
+  async function getMeta(key) {
+    const tx = db.transaction('meta', 'readonly');
+    const record = await requestResult(tx.objectStore('meta').get(key));
+    return record ? record.value : null;
   }
 
-  function getMeta(key) {
-    return requestResult(requireDb().transaction('meta', 'readonly').objectStore('meta').get(key))
-      .then(function (record) { return record ? record.value : null; });
-  }
-
-  function setMeta(key, value) {
-    var tx = requireDb().transaction('meta', 'readwrite');
-    tx.objectStore('meta').put({ key: key, value: value });
-    return new Promise(function (resolve, reject) {
-      tx.oncomplete = function () { resolve(); };
-      tx.onerror = function () { reject(tx.error); };
-      tx.onabort = function () { reject(tx.error || new Error('أُلغيت المعاملة.')); };
+  async function setMeta(key, value) {
+    const tx = db.transaction('meta', 'readwrite');
+    tx.objectStore('meta').put({ key, value });
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
     });
   }
 
-  /** يحفظ نتائج الفحص دون المساس ببيانات الكتالوج الأغنى إن وُجدت. */
-  function recordScan(games) {
-    if (!db || !Array.isArray(games) || !games.length) return Promise.resolve();
-    var now = new Date().toISOString();
-    var tx = db.transaction('games', 'readwrite');
-    var store = tx.objectStore('games');
-
-    games.forEach(function (game) {
-      if (!game || !game.gameId) return;
-      var id = normalizeId(game.gameId);
-      var request = store.get(id);
-      request.onsuccess = function () {
-        var previous = request.result || {};
-        store.put(Object.assign({}, previous, {
+  async function recordScan(games) {
+    if (!db || !Array.isArray(games) || !games.length) return;
+    const now = new Date().toISOString();
+    const tx = db.transaction('games', 'readwrite');
+    const store = tx.objectStore('games');
+    for (const game of games) {
+      if (!game || !game.gameId) continue;
+      const id = String(game.gameId).toUpperCase().replace('-', '_');
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const previous = request.result || {};
+        store.put({
+          ...previous,
           gameId: id,
           title: previous.catalogTitle || String(game.title || previous.title || id),
           detectedTitle: String(game.title || previous.detectedTitle || id),
@@ -96,205 +80,126 @@
           firstSeen: previous.firstSeen || now,
           lastSeen: now,
           scanCount: (previous.scanCount || 0) + 1,
-          source: previous.source || 'local-scan'
-        }));
-      };
-    });
-
-    return new Promise(function (resolve, reject) {
-      tx.oncomplete = function () { resolve(); };
-      tx.onerror = function () { reject(tx.error); };
-      tx.onabort = function () { reject(tx.error || new Error('أُلغيت معاملة الحفظ.')); };
-    });
-  }
-
-  /** يقرأ مانيفست الكتالوج ويطبّق السجلات الجديدة فقط عند تغيّر الإصدار. */
-  function syncCatalog() {
-    if (!db) return Promise.reject(new Error('قاعدة البيانات غير مهيأة.'));
-    return fetch(CATALOG_MANIFEST_URL + '?v=' + Date.now(), { cache: 'no-store' })
-      .then(function (response) {
-        if (!response.ok) throw new Error('بيان الكتالوج غير متاح.');
-        return response.json();
-      })
-      .then(function (manifest) {
-        return getMeta('catalogVersion').then(function (savedVersion) {
-          return getMeta('lastSync').then(function (savedAt) {
-            if (savedVersion === manifest.version && savedAt) {
-              lastSync = savedAt;
-              catalogStatus = 'online';
-              return { updated: false, status: 'online', version: manifest.version };
-            }
-            return fetch(CATALOG_URL + '?v=' + encodeURIComponent(manifest.version || '1'), { cache: 'no-store' })
-              .then(function (response) {
-                if (!response.ok) throw new Error('ملف الكتالوج غير متاح.');
-                return response.json();
-              })
-              .then(function (catalog) {
-                if (!Array.isArray(catalog.games)) throw new Error('صيغة الكتالوج غير صالحة.');
-                return applyCatalog(catalog, manifest);
-              });
-          });
+          source: 'local-scan'
         });
-      })
-      .catch(function (error) {
-        catalogStatus = 'offline';
-        return getMeta('lastSync').catch(function () { return null; }).then(function (savedAt) {
-          lastSync = savedAt;
-          return { updated: false, status: 'offline', error: error.message };
-        });
-      });
-  }
-
-  function applyCatalog(catalog, manifest) {
-    var tx = db.transaction(['games', 'meta'], 'readwrite');
-    var gamesStore = tx.objectStore('games');
-    var syncedAt = new Date().toISOString();
-
-    catalog.games.forEach(function (item) {
-      if (!item || !item.gameId) return;
-      var id = normalizeId(item.gameId);
-      var request = gamesStore.get(id);
-      request.onsuccess = function () {
-        var previous = request.result || {};
-        gamesStore.put(Object.assign({}, previous, item, {
-          gameId: id,
-          catalogTitle: item.title || previous.catalogTitle || null,
-          catalogRecord: true,
-          title: item.title || previous.title || id,
-          firstSeen: previous.firstSeen || item.firstSeen || null,
-          lastSeen: previous.lastSeen || null,
-          source: previous.source || 'central-catalog'
-        }));
       };
-    });
-
-    var metaStore = tx.objectStore('meta');
-    metaStore.put({ key: 'catalogVersion', value: manifest.version || catalog.version || '1' });
-    metaStore.put({ key: 'lastSync', value: syncedAt });
-
-    return new Promise(function (resolve, reject) {
-      tx.oncomplete = function () {
-        lastSync = syncedAt;
-        catalogStatus = 'online';
-        resolve({ updated: true, status: 'online', version: manifest.version, count: catalog.games.length });
-      };
-      tx.onerror = function () { reject(tx.error); };
-      tx.onabort = function () { reject(tx.error || new Error('أُلغيت معاملة الكتالوج.')); };
-    });
-  }
-
-  function getStats() {
-    if (!db) return Promise.resolve({ localCount: 0, catalogCount: 0, totalCount: 0, catalogVersion: null, lastSync: null, status: catalogStatus });
-    return getAllGames().then(function (games) {
-      return Promise.all([getMeta('catalogVersion'), getMeta('lastSync')]).then(function (meta) {
-        lastSync = meta[1];
-        return {
-          localCount: games.filter(function (game) { return game.source === 'local-scan' || game.lastSeen; }).length,
-          catalogCount: games.filter(function (game) { return game.catalogRecord; }).length,
-          totalCount: games.length,
-          catalogVersion: meta[0],
-          lastSync: meta[1],
-          status: catalogStatus
-        };
-      });
-    });
-  }
-
-  function enrichGames(scannedGames) {
-    return getAllGames().then(function (records) {
-      var byId = new Map(records.map(function (record) { return [record.gameId, record]; }));
-      return scannedGames.map(function (game) {
-        var record = byId.get(normalizeId(game.gameId));
-        if (!record) return game;
-        return Object.assign({}, game, {
-          title: record.catalogTitle || game.title,
-          databaseRecord: record,
-          publisher: record.publisher || '',
-          developer: record.developer || '',
-          releaseYear: record.releaseYear || '',
-          region: record.region || '',
-          genre: record.genre || '',
-          description: record.description || ''
-        });
-      });
-    });
-  }
-
-  function exportBackup() {
-    return getAllGames().then(function (games) {
-      return Promise.all([getMeta('catalogVersion'), getMeta('lastSync')]).then(function (meta) {
-        return {
-          application: 'Saad PS2',
-          schemaVersion: DB_VERSION,
-          exportedAt: new Date().toISOString(),
-          catalogVersion: meta[0],
-          lastSync: meta[1],
-          games: games
-        };
-      });
-    });
-  }
-
-  /**
-   * يستورد نسخة احتياطية أنشأها التطبيق.
-   * يحل محل السجل بنفس gameId ويحتفظ ببقية المكتبة.
-   */
-  function importBackup(backup) {
-    if (!db) return Promise.reject(new Error('قاعدة البيانات غير مهيأة.'));
-    if (!backup || !Array.isArray(backup.games)) {
-      return Promise.reject(new Error('الملف لا يحتوي نسخة احتياطية صالحة.'));
     }
-    if (backup.application && backup.application !== 'Saad PS2') {
-      return Promise.reject(new Error('هذه النسخة لا تنتمي إلى Saad PS2.'));
-    }
-    if (backup.games.length > MAX_IMPORT_RECORDS) {
-      return Promise.reject(new Error('عدد السجلات أكبر من الحد المسموح.'));
-    }
-
-    var tx = db.transaction('games', 'readwrite');
-    var store = tx.objectStore('games');
-    var imported = 0;
-    var skipped = 0;
-
-    backup.games.forEach(function (item) {
-      if (!item || !item.gameId || typeof item.gameId !== 'string') { skipped++; return; }
-      var id = normalizeId(item.gameId);
-      if (!/^[A-Z0-9]{4}_\d{3}\.\d{2}$/.test(id)) { skipped++; return; }
-      store.put(Object.assign({}, item, {
-        gameId: id,
-        title: String(item.title || item.detectedTitle || id).slice(0, 200),
-        source: item.source || 'local-scan',
-        lastSeen: item.lastSeen || new Date().toISOString()
-      }));
-      imported++;
-    });
-
-    return new Promise(function (resolve, reject) {
-      tx.oncomplete = function () { resolve({ imported: imported, skipped: skipped }); };
-      tx.onerror = function () { reject(tx.error); };
-      tx.onabort = function () { reject(tx.error || new Error('أُلغيت معاملة الاستيراد.')); };
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Scan save aborted'));
     });
   }
 
-  function init() {
-    if (db) return Promise.resolve(true);
-    return openDatabase().then(function (database) {
-      db = database;
-      return getMeta('lastSync').then(function (savedAt) {
+  async function syncCatalog() {
+    if (!db) throw new Error('Database is not initialized');
+    try {
+      const manifestResponse = await fetch(CATALOG_MANIFEST_URL + '?v=' + Date.now(), { cache: 'no-store' });
+      if (!manifestResponse.ok) throw new Error('Manifest unavailable');
+      const manifest = await manifestResponse.json();
+      const savedVersion = await getMeta('catalogVersion');
+      const savedAt = await getMeta('lastSync');
+      if (savedVersion === manifest.version && savedAt) {
         lastSync = savedAt;
-        return true;
+        catalogStatus = 'online';
+        return { updated: false, status: 'online', version: manifest.version };
+      }
+
+      const catalogResponse = await fetch(CATALOG_URL + '?v=' + encodeURIComponent(manifest.version || '1'), { cache: 'no-store' });
+      if (!catalogResponse.ok) throw new Error('Catalog unavailable');
+      const catalog = await catalogResponse.json();
+      if (!Array.isArray(catalog.games)) throw new Error('Invalid catalog format');
+
+      const tx = db.transaction(['games', 'meta'], 'readwrite');
+      const gamesStore = tx.objectStore('games');
+      for (const item of catalog.games) {
+        if (!item || !item.gameId) continue;
+        const id = String(item.gameId).toUpperCase().replace('-', '_');
+        const request = gamesStore.get(id);
+        request.onsuccess = () => {
+          const previous = request.result || {};
+          gamesStore.put({
+            ...previous,
+            ...item,
+            gameId: id,
+            catalogTitle: item.title || previous.catalogTitle || null,
+            catalogRecord: true,
+            title: item.title || previous.title || id,
+            firstSeen: previous.firstSeen || item.firstSeen || null,
+            lastSeen: previous.lastSeen || null,
+            source: previous.source || 'central-catalog'
+          });
+        };
+      }
+      const metaStore = tx.objectStore('meta');
+      const syncedAt = new Date().toISOString();
+      metaStore.put({ key: 'catalogVersion', value: manifest.version || catalog.version || '1' });
+      metaStore.put({ key: 'lastSync', value: syncedAt });
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error('Catalog transaction aborted'));
       });
+      lastSync = syncedAt;
+      catalogStatus = 'online';
+      return { updated: true, status: 'online', version: manifest.version, count: catalog.games.length };
+    } catch (error) {
+      catalogStatus = 'offline';
+      lastSync = await getMeta('lastSync').catch(() => null);
+      return { updated: false, status: 'offline', error: error.message };
+    }
+  }
+
+  async function getStats() {
+    const games = db ? await getAllGames() : [];
+    const catalogVersion = db ? await getMeta('catalogVersion') : null;
+    lastSync = db ? await getMeta('lastSync') : null;
+    return {
+      localCount: games.filter(game => game.source === 'local-scan' || game.lastSeen).length,
+      catalogCount: games.filter(game => game.catalogRecord).length,
+      totalCount: games.length,
+      catalogVersion,
+      lastSync,
+      status: catalogStatus
+    };
+  }
+
+  async function enrichGames(scannedGames) {
+    const records = await getAllGames();
+    const byId = new Map(records.map(record => [record.gameId, record]));
+    return scannedGames.map(game => {
+      const record = byId.get(String(game.gameId).toUpperCase().replace('-', '_'));
+      if (!record) return game;
+      return {
+        ...game,
+        title: record.catalogTitle || game.title,
+        databaseRecord: record,
+        publisher: record.publisher || '',
+        developer: record.developer || '',
+        releaseYear: record.releaseYear || '',
+        region: record.region || '',
+        genre: record.genre || '',
+        description: record.description || ''
+      };
     });
   }
 
-  window.SaadGameDB = {
-    init: init,
-    recordScan: recordScan,
-    syncCatalog: syncCatalog,
-    getStats: getStats,
-    exportBackup: exportBackup,
-    importBackup: importBackup,
-    getAllGames: getAllGames,
-    enrichGames: enrichGames
-  };
+  async function exportBackup() {
+    const games = await getAllGames();
+    return {
+      application: 'Saad PS2',
+      schemaVersion: DB_VERSION,
+      exportedAt: new Date().toISOString(),
+      catalogVersion: await getMeta('catalogVersion'),
+      games
+    };
+  }
+
+  async function init() {
+    if (!db) db = await openDatabase();
+    lastSync = await getMeta('lastSync');
+    return true;
+  }
+
+  window.SaadGameDB = { init, recordScan, syncCatalog, getStats, exportBackup, getAllGames, enrichGames };
 })();

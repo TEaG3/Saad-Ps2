@@ -5,14 +5,10 @@ on:
     branches: [main]
     paths:
       - 'index.html'
-      - 'styles.css'
-      - 'app.js'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'capacitor.config.ts'
       - 'package.json'
-      - 'package-lock.json'
-      - 'icon.svg'
       - 'saf-storage-bridge.bundle.js'
       - 'game-database.js'
       - 'database/**'
@@ -33,15 +29,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Capacitor
-        run: npm ci --no-audit --no-fund
-      - name: Validate web source
-        run: |
-          npm run check
-          test -s index.html && test -s styles.css && test -s app.js
+        run: npm install --no-audit --no-fund
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html styles.css app.js manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
+          cp index.html manifest.webmanifest sw.js icon.svg saf-storage-bridge.bundle.js game-database.js www/
           mkdir -p www/database
           cp database/manifest.json database/catalog.json www/database/
       - name: Bundle native plugin proxy
@@ -102,28 +94,13 @@ jobs:
           echo "Building Saad PS2 $VERSION (code $VERSION_CODE)"
       - name: Sync web assets
         run: npx cap sync android
-      - name: Build installable Android APKs
+      - name: Build debug APK
         working-directory: android
-        run: |
-          # Release variant is optimized but signed with Android's temporary debug key
-          # so it can be installed directly for device testing. A private upload key
-          # is required later for Play Store publication and trusted app updates.
-          cat >> app/build.gradle <<'EOF'
-          android {
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
-          }
-          EOF
-          ./gradlew assembleDebug assembleRelease
+        run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v6
         with:
-          name: saad-ps2-android-apks
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release.apk
+          name: saad-ps2-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish APK on project download page
@@ -133,12 +110,10 @@ jobs:
           name: Saad PS2 - Latest Android APK
           body: |
             أحدث نسخة Android من Saad PS2.
-            يتضمن APK تجريبياً ونسخة Release محسّنة وموقعة بمفتاح Android debug لتثبيتها مباشرة.
-            هذا ليس مفتاح نشر Play Store؛ يلزم مفتاح توقيع خاص للمداومة على التحديثات والنشر الرسمي.
+            يتم تحديث هذا الإصدار تلقائياً عند نجاح بناء APK جديد.
           prerelease: true
           make_latest: false
           files: |
             android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release.apk
           fail_on_unmatched_files: true
           overwrite_files: true

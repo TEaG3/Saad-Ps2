@@ -2,6 +2,9 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0a0e17">
     <meta name="description" content="Saad PS2 Artwork Station - إدارة أغلفة وأيقونات ألعاب PlayStation 2">
@@ -14,29 +17,32 @@
     <title>Saad PS2 | مدير أغلفة وأيقونات ألعاب بلايستيشن 2</title>
     <style>
         :root {
-            --bg-dark: #0a0e17;
-            --card-bg: #131b2e;
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --accent: #00d2ff;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border: #1e293b;
+            color-scheme: dark;
+            --bg-dark: #081321;
+            --card-bg: #111f31;
+            --card-raised: #172a40;
+            --primary: #2878d0;
+            --primary-hover: #2165b2;
+            --accent: #28b7c5;
+            --success: #1c9b69;
+            --warning: #d99a32;
+            --danger: #d65b62;
+            --text-main: #f3f7fb;
+            --text-muted: #a8b8c9;
+            --border: #2a4058;
+            --surface-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Tajawal', 'Noto Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif;
         }
 
         body {
             background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 50% 0%, #1e3a8a33 0%, transparent 60%);
+            background-image: radial-gradient(ellipse at 50% 0%, rgba(40, 120, 208, 0.16) 0%, transparent 58%);
             color: var(--text-main);
             min-height: 100vh;
             padding: 20px;
@@ -55,7 +61,7 @@
             border: 1px solid var(--border);
             border-radius: 16px;
             margin-bottom: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            box-shadow: var(--surface-shadow);
             flex-wrap: wrap;
             gap: 15px;
         }
@@ -136,7 +142,7 @@
 
         button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .btn-primary { background: linear-gradient(135deg, var(--primary), #3b82f6); box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), #3294d4); box-shadow: 0 3px 10px rgba(40, 120, 208, 0.2); }
         .btn-primary:hover:not(:disabled) { transform: translateY(-2px); background: var(--primary-hover); }
         .btn-success { background: var(--success); }
         .btn-warning { background: var(--warning); color: #000; }
@@ -159,7 +165,7 @@
             text-align: center;
         }
 
-        .stat-card h3 { font-size: 28px; color: var(--accent); margin-bottom: 4px; }
+        .stat-card h3 { font-size: 28px; color: #55c7d0; margin-bottom: 4px; }
         .stat-card span { font-size: 13px; color: var(--text-muted); }
 
         .progress-wrapper {
@@ -175,7 +181,7 @@
         .progress-head #progressText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
         .progress-bar-bg { width: 100%; height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden; margin-top: 10px; }
-        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0%; transition: width 0.3s ease; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #2478cf, #28b7a6); width: 0%; transition: width 0.3s ease; }
 
         .report {
             display: none;
@@ -204,8 +210,8 @@
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; }
         .badge-iso { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
         .badge-ul { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .badge-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-        .badge-missing { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge-ok { background: rgba(28, 155, 105, 0.2); color: #65d5a6; }
+        .badge-missing { background: rgba(214, 91, 98, 0.18); color: #ff9298; }
 
         .cover-preview {
             width: 42px; height: 58px;
@@ -332,10 +338,26 @@
 
         footer { text-align: center; color: var(--text-muted); font-size: 12px; margin: 28px 0 8px; line-height: 1.8; }
 
-        @media (max-width: 820px) { .browse-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 820px) {
+            .browse-grid { grid-template-columns: 1fr; }
+            .container { width: 100%; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
 
         @media (max-width: 700px) {
             body { padding: 10px; }
+            button, .btn-link, select, input[type="search"] { min-height: 42px; }
+            .toolbar { gap: 8px; }
+            .toolbar .count { width: 100%; margin-inline-start: 0; }
+            .table-container { border-radius: 12px; }
             .hero { padding: 16px 6px 12px; }
             .art-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
             header { padding: 18px; }

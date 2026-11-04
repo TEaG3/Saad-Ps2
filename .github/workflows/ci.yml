@@ -1,0 +1,25 @@
+name: Saad PS2 CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'game-id-parser.js'
+      - 'game-database.js'
+      - 'database/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/ci.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run parser and catalogue integrity tests
+        run: npm test
